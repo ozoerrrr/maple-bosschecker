@@ -9,19 +9,26 @@ export default async function ProjectSettingsPage({ params }: { params: { projec
   const { supabase, user, project, role } = await requireProjectMember(params.projectId);
   if (role !== "owner") redirect(`/p/${params.projectId}`);
 
-  const [{ data: bosses }, { data: parties }, { data: partyMembers }, { data: members }, { data: ownProfile }] =
-    await Promise.all([
-      supabase.from("bosses").select("*").eq("project_id", project.id).order("sort_order"),
-      supabase.from("parties").select("*").eq("project_id", project.id).order("sort_order"),
-      supabase
-        .from("party_members")
-        .select("party_id, user_id, parties!inner(project_id)")
-        .eq("parties.project_id", project.id),
-      // [고침] project_members -> profiles 실제 FK가 없어 임베드가 조용히
-      // 빈 결과를 내던 문제 (아래에서 profiles를 따로 불러와 JS로 합침).
-      supabase.from("project_members").select("user_id, role").eq("project_id", project.id),
-      supabase.from("profiles").select("nexon_character_name").eq("id", user.id).single(),
-    ]);
+  const [
+    { data: bosses },
+    { data: parties },
+    { data: partyMembers },
+    { data: members },
+    { data: ownProfile },
+    { data: bossCandidates },
+  ] = await Promise.all([
+    supabase.from("bosses").select("*").eq("project_id", project.id).order("sort_order"),
+    supabase.from("parties").select("*").eq("project_id", project.id).order("sort_order"),
+    supabase
+      .from("party_members")
+      .select("party_id, user_id, character_name, parties!inner(project_id)")
+      .eq("parties.project_id", project.id),
+    // [고침] project_members -> profiles 실제 FK가 없어 임베드가 조용히
+    // 빈 결과를 내던 문제 (아래에서 profiles를 따로 불러와 JS로 합침).
+    supabase.from("project_members").select("user_id, role").eq("project_id", project.id),
+    supabase.from("profiles").select("nexon_character_name").eq("id", user.id).single(),
+    supabase.from("boss_candidates").select("*").eq("project_id", project.id),
+  ]);
 
   type MemberRow = { user_id: string; role: string };
   const memberRows = (members ?? []) as MemberRow[];
@@ -36,13 +43,23 @@ export default async function ProjectSettingsPage({ params }: { params: { projec
     role: m.role,
   }));
 
-  const partyMembersByParty = new Map<string, string[]>();
-  for (const pm of (partyMembers ?? []) as { party_id: string; user_id: string }[]) {
+  const partyMembersByParty = new Map<string, { userId: string; characterName: string | null }[]>();
+  for (const pm of (partyMembers ?? []) as { party_id: string; user_id: string; character_name: string | null }[]) {
     const arr = partyMembersByParty.get(pm.party_id) ?? [];
-    arr.push(pm.user_id);
+    arr.push({ userId: pm.user_id, characterName: pm.character_name });
     partyMembersByParty.set(pm.party_id, arr);
   }
   const partyList = (parties ?? []).map((p) => ({ ...p, members: partyMembersByParty.get(p.id) ?? [] }));
+
+  // boss_candidates에는 user_id만 있고 표시용 이름은 없어서, 멤버 목록
+  // (memberList)에서 JS로 합친다 -- 위 party_members/profiles와 같은 패턴.
+  const candidateList = (bossCandidates ?? []).map((c) => ({
+    id: c.id,
+    bossId: c.boss_id,
+    userId: c.user_id,
+    characterName: c.character_name,
+    memberName: profileNameById.get(c.user_id) ?? "이름없음",
+  }));
 
   return (
     <div className="flex flex-col gap-4">
@@ -51,8 +68,16 @@ export default async function ProjectSettingsPage({ params }: { params: { projec
         projectId={project.id}
         existingBosses={(bosses ?? []).map((b) => ({ name: b.name, difficulty: b.difficulty }))}
         myCharacterName={ownProfile?.nexon_character_name ?? null}
+        members={memberList}
+        currentUserId={user.id}
       />
-      <BossRosterEditor projectId={project.id} bosses={bosses ?? []} parties={partyList} members={memberList} />
+      <BossRosterEditor
+        projectId={project.id}
+        bosses={bosses ?? []}
+        parties={partyList}
+        members={memberList}
+        candidates={candidateList}
+      />
 
       <div className="card flex flex-col gap-3">
         <h2 className="font-semibold" style={{ color: "var(--danger)" }}>

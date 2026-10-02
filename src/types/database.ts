@@ -90,9 +90,27 @@ export type Database = {
         Relationships: NoRelationships;
       };
       party_members: {
-        Row: { party_id: string; user_id: string };
-        Insert: { party_id: string; user_id: string };
-        Update: Partial<{ party_id: string; user_id: string }>;
+        Row: { party_id: string; user_id: string; character_name: string | null };
+        Insert: { party_id: string; user_id: string; character_name?: string | null };
+        Update: Partial<{ party_id: string; user_id: string; character_name: string | null }>;
+        Relationships: NoRelationships;
+      };
+      boss_candidates: {
+        Row: {
+          id: string;
+          project_id: string;
+          boss_id: string;
+          user_id: string;
+          character_name: string;
+          created_at: string;
+        };
+        Insert: Partial<Database["public"]["Tables"]["boss_candidates"]["Row"]> & {
+          project_id: string;
+          boss_id: string;
+          user_id: string;
+          character_name: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["boss_candidates"]["Row"]>;
         Relationships: NoRelationships;
       };
       availability: {

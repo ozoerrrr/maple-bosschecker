@@ -14,12 +14,17 @@ interface Boss {
   sort_order: number;
 }
 
+interface PartyMember {
+  userId: string;
+  characterName: string | null;
+}
+
 interface Party {
   id: string;
   boss_id: string;
   label: string | null;
   sort_order: number;
-  members: string[];
+  members: PartyMember[];
 }
 
 interface Member {
@@ -28,17 +33,46 @@ interface Member {
   role: string;
 }
 
+/** 넥슨에서 불러와 아직 파티에 안 들어간 "후보 캐릭터" (boss_candidates 한 행). */
+interface Candidate {
+  id: string;
+  bossId: string;
+  userId: string;
+  characterName: string;
+  memberName: string;
+}
+
 interface Props {
   projectId: string;
   bosses: Boss[];
   parties: Party[];
   members: Member[];
+  candidates: Candidate[];
+}
+
+/** 드래그 중인 후보 캐릭터를 dataTransfer로 나르는 페이로드. */
+interface DragPayload {
+  candidateId: string;
+  userId: string;
+  characterName: string;
+}
+
+const DND_MIME = "application/json";
+
+function readDragPayload(e: React.DragEvent): DragPayload | null {
+  try {
+    const raw = e.dataTransfer.getData(DND_MIME);
+    if (!raw) return null;
+    return JSON.parse(raw) as DragPayload;
+  } catch {
+    return null;
+  }
 }
 
 // 보스/파티를 직접 CRUD하는 설정 화면. 원본의 하드코딩된 BOSS_ORDER +
 // RAW_PARTIES + "예약된 변경사항" 메커니즘을 대신한다 -- 여기서 하는 모든
 // 조작은 바로 실제 DB 행이라, 재배포나 예약 개념 자체가 필요 없다.
-export default function BossRosterEditor({ projectId, bosses, parties, members }: Props) {
+export default function BossRosterEditor({ projectId, bosses, parties, members, candidates }: Props) {
   const supabase = createClient();
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -133,6 +167,57 @@ export default function BossRosterEditor({ projectId, bosses, parties, members }
     });
   }
 
+  // 후보 캐릭터를 기존 파티로 드래그/선택: 아직 그 파티에 없으면
+  // party_members에 추가하고, 후보 풀에서는 제거한다.
+  function assignCandidateToParty(party: Party, payload: DragPayload) {
+    startTransition(async () => {
+      const alreadyIn = party.members.some((m) => m.userId === payload.userId);
+      if (!alreadyIn) {
+        await supabase
+          .from("party_members")
+          .insert({ party_id: party.id, user_id: payload.userId, character_name: payload.characterName });
+      }
+      await supabase.from("boss_candidates").delete().eq("id", payload.candidateId);
+      refresh();
+    });
+  }
+
+  // 후보 캐릭터를 "새 파티"로 드래그/선택: 그 보스에 새 파티를 만들고
+  // 첫 멤버로 넣는다.
+  function assignCandidateToNewParty(boss: Boss, payload: DragPayload) {
+    startTransition(async () => {
+      const bossParties = parties.filter((p) => p.boss_id === boss.id);
+      const sortOrder = bossParties.length;
+      const { data } = await supabase
+        .from("parties")
+        .insert({ project_id: projectId, boss_id: boss.id, label: null, sort_order: sortOrder })
+        .select("id")
+        .single();
+      if (data?.id) {
+        await supabase
+          .from("party_members")
+          .insert({ party_id: data.id, user_id: payload.userId, character_name: payload.characterName });
+      }
+      await supabase.from("boss_candidates").delete().eq("id", payload.candidateId);
+      refresh();
+    });
+  }
+
+  // 파티원을 빼서 다시 후보 풀로 되돌린다 (best-effort: 캐릭터명이 없는
+  // 수동 추가 멤버는 후보로 되돌릴 캐릭터명이 없어서 그냥 제거만 한다).
+  function unassignToCandidate(boss: Boss, party: Party, member: PartyMember) {
+    startTransition(async () => {
+      await supabase.from("party_members").delete().eq("party_id", party.id).eq("user_id", member.userId);
+      if (member.characterName) {
+        await supabase.from("boss_candidates").upsert(
+          { project_id: projectId, boss_id: boss.id, user_id: member.userId, character_name: member.characterName },
+          { onConflict: "boss_id,user_id,character_name", ignoreDuplicates: true }
+        );
+      }
+      refresh();
+    });
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <form onSubmit={addBoss} className="card flex flex-wrap items-end gap-2">
@@ -186,6 +271,7 @@ export default function BossRosterEditor({ projectId, bosses, parties, members }
         .sort((a, b) => a.sort_order - b.sort_order)
         .map((boss, idx, arr) => {
           const bossParties = parties.filter((p) => p.boss_id === boss.id).sort((a, b) => a.sort_order - b.sort_order);
+          const bossCandidates = candidates.filter((c) => c.bossId === boss.id);
           return (
             <div key={boss.id} className="card flex flex-col gap-2">
               <div className="flex items-center justify-between">
@@ -243,12 +329,37 @@ export default function BossRosterEditor({ projectId, bosses, parties, members }
 
               <div className="flex flex-col gap-1">
                 {bossParties.map((p) => (
-                  <div key={p.id} className="flex items-center justify-between row-sub px-3 py-1.5 text-sm">
-                    <div>
-                      <span className="font-medium">{p.label || "파티"}</span>{" "}
-                      <span className="text-muted text-xs">
-                        {p.members.map((uid) => members.find((m) => m.id === uid)?.name ?? "?").join(", ") || "멤버 없음"}
-                      </span>
+                  <div
+                    key={p.id}
+                    className="flex items-center justify-between row-sub px-3 py-1.5 text-sm"
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      const payload = readDragPayload(e);
+                      if (payload) assignCandidateToParty(p, payload);
+                    }}
+                  >
+                    <div className="flex flex-wrap items-center gap-1">
+                      <span className="font-medium">{p.label || "파티"}</span>
+                      {p.members.length === 0 && <span className="text-muted text-xs">멤버 없음</span>}
+                      {p.members.map((m) => {
+                        const name = members.find((mm) => mm.id === m.userId)?.name ?? "?";
+                        return (
+                          <span key={m.userId} className="chip">
+                            {m.characterName ? `${name} (${m.characterName})` : name}
+                            <button
+                              type="button"
+                              onClick={() => unassignToCandidate(boss, p, m)}
+                              title="파티에서 빼서 후보로 되돌리기"
+                              aria-label={`${name} 파티에서 빼기`}
+                              className="text-muted"
+                              style={{ marginLeft: 2 }}
+                            >
+                              ×
+                            </button>
+                          </span>
+                        );
+                      })}
                     </div>
                     <div className="flex gap-2 text-xs">
                       <button onClick={() => setEditingParty(p)} className="underline">
@@ -261,6 +372,67 @@ export default function BossRosterEditor({ projectId, bosses, parties, members }
                   </div>
                 ))}
               </div>
+
+              {bossCandidates.length > 0 && (
+                <div className="flex flex-col gap-1.5">
+                  <p className="label">후보 캐릭터 (드래그해서 위 파티에 놓거나, 옆 드롭다운으로 배정)</p>
+                  <div className="flex flex-col gap-1.5">
+                    {bossCandidates.map((c) => (
+                      <div key={c.id} className="flex items-center justify-between gap-2">
+                        <span
+                          className="chip"
+                          draggable
+                          onDragStart={(e) => {
+                            e.dataTransfer.setData(
+                              DND_MIME,
+                              JSON.stringify({ candidateId: c.id, userId: c.userId, characterName: c.characterName } satisfies DragPayload)
+                            );
+                          }}
+                          title="드래그해서 파티에 놓으세요"
+                          style={{ cursor: "grab" }}
+                        >
+                          {c.memberName} · {c.characterName}
+                        </span>
+                        <select
+                          defaultValue=""
+                          className="confirm-select"
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            if (!value) return;
+                            const payload: DragPayload = { candidateId: c.id, userId: c.userId, characterName: c.characterName };
+                            if (value === "__new__") assignCandidateToNewParty(boss, payload);
+                            else {
+                              const target = bossParties.find((p) => p.id === value);
+                              if (target) assignCandidateToParty(target, payload);
+                            }
+                            e.target.value = "";
+                          }}
+                        >
+                          <option value="">이 보스의 파티로 보내기</option>
+                          {bossParties.map((p, i) => (
+                            <option key={p.id} value={p.id}>
+                              {p.label || `파티 ${i + 1}`}
+                            </option>
+                          ))}
+                          <option value="__new__">(새 파티)</option>
+                        </select>
+                      </div>
+                    ))}
+                  </div>
+                  <div
+                    className="row-sub px-3 py-2 text-xs text-muted"
+                    style={{ border: "1.5px dashed var(--border)" }}
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      const payload = readDragPayload(e);
+                      if (payload) assignCandidateToNewParty(boss, payload);
+                    }}
+                  >
+                    여기로 드래그해서 새 파티 만들기
+                  </div>
+                </div>
+              )}
 
               {addingPartyFor === boss.id ? (
                 <PartyEditorForm
@@ -320,8 +492,13 @@ function PartyEditorForm({
 }) {
   const supabase = createClient();
   const [label, setLabel] = useState(party?.label ?? "");
-  const [selected, setSelected] = useState<Set<string>>(new Set(party?.members ?? []));
+  const [selected, setSelected] = useState<Set<string>>(new Set((party?.members ?? []).map((m) => m.userId)));
   const [isPending, startTransition] = useTransition();
+
+  // 기존에 드래그 앤 드롭으로 배정해둔 캐릭터명은, 이 수동 편집 폼으로 멤버
+  // 선택을 저장해도 그대로 유지한다 (다시 체크 해제했다가 체크하면 캐릭터명은
+  // 사라짐 -- 그 경우는 후보 풀에서 다시 드래그해서 채워야 한다).
+  const existingCharByUser = new Map((party?.members ?? []).map((m) => [m.userId, m.characterName]));
 
   function toggleMember(id: string) {
     const next = new Set(selected);
@@ -345,7 +522,13 @@ function PartyEditorForm({
         partyId = data?.id;
       }
       if (partyId && selected.size > 0) {
-        await supabase.from("party_members").insert(Array.from(selected).map((uid) => ({ party_id: partyId!, user_id: uid })));
+        await supabase.from("party_members").insert(
+          Array.from(selected).map((uid) => ({
+            party_id: partyId!,
+            user_id: uid,
+            character_name: existingCharByUser.get(uid) ?? null,
+          }))
+        );
       }
       onDone();
     });

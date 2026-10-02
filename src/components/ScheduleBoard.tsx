@@ -74,7 +74,7 @@ export default function ScheduleBoard(props: Props) {
       monthly: { total: 0, remaining: 0, count: 0 },
     };
     for (const p of props.parties) {
-      if (!p.members.includes(props.currentUserId)) continue;
+      if (!p.members.some((m) => m.userId === props.currentUserId)) continue;
       const boss = bossById.get(p.boss_id);
       if (!boss) continue;
       const perPerson = mesoPerPerson(boss.name, boss.difficulty, p.members.length);

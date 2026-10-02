@@ -26,7 +26,7 @@ export default async function ProjectDashboardPage({ params }: { params: { proje
     supabase.from("parties").select("*").eq("project_id", projectId).order("sort_order"),
     supabase
       .from("party_members")
-      .select("party_id, user_id, parties!inner(project_id)")
+      .select("party_id, user_id, character_name, parties!inner(project_id)")
       .eq("parties.project_id", projectId),
     supabase.from("availability").select("user_id, day, hour").eq("project_id", projectId),
     supabase.from("next_availability").select("user_id, day, hour").eq("project_id", projectId),
@@ -54,10 +54,10 @@ export default async function ProjectDashboardPage({ params }: { params: { proje
     color: m.color,
   }));
 
-  const partyMembersByParty = new Map<string, string[]>();
-  for (const pm of (partyMembers ?? []) as { party_id: string; user_id: string }[]) {
+  const partyMembersByParty = new Map<string, { userId: string; characterName: string | null }[]>();
+  for (const pm of (partyMembers ?? []) as { party_id: string; user_id: string; character_name: string | null }[]) {
     const arr = partyMembersByParty.get(pm.party_id) ?? [];
-    arr.push(pm.user_id);
+    arr.push({ userId: pm.user_id, characterName: pm.character_name });
     partyMembersByParty.set(pm.party_id, arr);
   }
 

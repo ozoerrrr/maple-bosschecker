@@ -40,7 +40,14 @@ export default function PartyCard({ projectId, boss, party, weekMode, currentUse
   const isMonthly = boss.period === "monthly";
 
   const partyObj = useMemo(
-    () => ({ id: party.id, project_id: projectId, boss_id: party.boss_id, label: party.label, sort_order: party.sort_order, members: party.members }),
+    () => ({
+      id: party.id,
+      project_id: projectId,
+      boss_id: party.boss_id,
+      label: party.label,
+      sort_order: party.sort_order,
+      members: party.members.map((m) => m.userId),
+    }),
     [party, projectId]
   );
 
@@ -59,7 +66,7 @@ export default function PartyCard({ projectId, boss, party, weekMode, currentUse
     return candidateMonthlyDates(snapshot, partyObj);
   }, [snapshot, partyObj, isMonthly]);
 
-  const isInParty = party.members.includes(currentUserId);
+  const isInParty = party.members.some((m) => m.userId === currentUserId);
 
   const confirmedMonthlySlot =
     isMonthly && confirmation && !confirmation.cleared && confirmation.confirmed_date && confirmation.hour != null
@@ -138,7 +145,9 @@ export default function PartyCard({ projectId, boss, party, weekMode, currentUse
         <div className="flex flex-wrap items-center gap-1">
           <span className="font-medium">{party.label || "파티"}</span>
           <span className="text-xs text-[color:var(--muted)]">
-            {party.members.map((m) => memberName(m)).join(", ") || "멤버 없음"}
+            {party.members
+              .map((m) => (m.characterName ? `${memberName(m.userId)} (${m.characterName})` : memberName(m.userId)))
+              .join(", ") || "멤버 없음"}
           </span>
         </div>
 

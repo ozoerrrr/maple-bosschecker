@@ -13,12 +13,18 @@ export interface RawBoss {
   sort_order: number;
 }
 
+/** party_members 조인 결과 한 행: 누구(user_id)이고, 어떤 캐릭터로 도는지. */
+export interface RawPartyMember {
+  userId: string;
+  characterName: string | null;
+}
+
 export interface RawParty {
   id: string;
   boss_id: string;
   label: string | null;
   sort_order: number;
-  members: string[];
+  members: RawPartyMember[];
 }
 
 export interface RawAvailabilityRow {
@@ -77,13 +83,16 @@ export function buildSnapshot(input: {
   const bossPeriod: Record<string, "weekly" | "monthly"> = {};
   for (const b of input.bosses) bossPeriod[b.id] = b.period;
 
+  // scheduling/parties.ts의 후보 슬롯 계산은 순수하게 user_id 집합만
+  // 필요하므로(누가 어떤 캐릭터인지는 무관), 여기서는 캐릭터명을 뺀
+  // user_id 배열로 납작하게 펴서 넘긴다.
   const parties: Party[] = input.parties.map((p) => ({
     id: p.id,
     project_id: "",
     boss_id: p.boss_id,
     label: p.label,
     sort_order: p.sort_order,
-    members: p.members,
+    members: p.members.map((m) => m.userId),
   }));
 
   const confirmed: ConfirmationMap = {};
