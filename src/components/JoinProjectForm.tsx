@@ -26,29 +26,22 @@ export default function JoinProjectForm() {
       return;
     }
 
-    const { data: project, error: lookupError } = await supabase
-      .from("projects")
-      .select("id")
-      .eq("invite_code", code.trim())
-      .maybeSingle();
+    // [고침] projects의 select RLS가 "멤버이거나 소유자"만 허용해서, 아직
+    // 멤버가 아닌 사람은 초대코드로 프로젝트를 조회하는 것 자체가 막혀
+    // 있었다(닭과 달걀 문제). RPC(SECURITY DEFINER)로 조회+가입을 원자적으로
+    // 처리한다 -- Database 타입에 커스텀 함수 시그니처가 없어서 as any 캐스트.
+    const { data: projectId, error: rpcError } = await (supabase.rpc as any)(
+      "join_project_by_invite_code",
+      { p_invite_code: code.trim() }
+    );
 
-    if (lookupError || !project) {
-      setError("초대코드를 찾을 수 없어요.");
+    if (rpcError || !projectId) {
+      setError(rpcError?.message || "초대코드를 찾을 수 없어요.");
       setLoading(false);
       return;
     }
 
-    const { error: joinError } = await supabase
-      .from("project_members")
-      .upsert({ project_id: project.id, user_id: user.id, role: "member" }, { onConflict: "project_id,user_id" });
-
-    if (joinError) {
-      setError(joinError.message);
-      setLoading(false);
-      return;
-    }
-
-    router.push(`/p/${project.id}`);
+    router.push(`/p/${projectId}`);
   }
 
   return (

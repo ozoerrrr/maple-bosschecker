@@ -26,18 +26,11 @@ interface ExistingBoss {
   difficulty: string | null;
 }
 
-interface MemberOption {
-  id: string;
-  name: string;
-}
-
 interface Props {
   projectId: string;
   existingBosses: ExistingBoss[];
   /** 프로필에 연동해둔 내 본캐 닉네임. 캐릭터 입력칸의 기본값으로 쓴다. */
   myCharacterName?: string | null;
-  /** 그룹 멤버 목록 -- 조회한 캐릭터가 누구 소속인지 태깅할 때 쓴다. */
-  members: MemberOption[];
   currentUserId: string;
 }
 
@@ -61,7 +54,6 @@ export default function ImportBossesFromNexon({
   projectId,
   existingBosses,
   myCharacterName,
-  members,
   currentUserId,
 }: Props) {
   const supabase = createClient();
@@ -75,10 +67,6 @@ export default function ImportBossesFromNexon({
   const [charErrors, setCharErrors] = useState<{ characterName: string; error: string }[]>([]);
   const [bosses, setBosses] = useState<FetchedBoss[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  // 조회된 캐릭터 닉네임 -> 이 캐릭터가 소속된 프로젝트 멤버 id. 기본은
-  // 본인(소유자)이고, 소유자가 드롭다운으로 다른 멤버로 바꿀 수 있다
-  // (넥슨 API는 닉네임만 알면 조회되지 계정 소유권을 증명하는 게 아니라서).
-  const [ownerByCharacter, setOwnerByCharacter] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
 
   function bossKey(b: FetchedBoss) {
@@ -126,16 +114,6 @@ export default function ImportBossesFromNexon({
       r.error ? [] : r.bosses.map((b) => ({ ...b, characterName: r.character_name }))
     );
     setBosses(allBosses);
-
-    // 조회된 캐릭터마다 기본 소속 멤버는 본인(소유자). 매번 새로 조회해도
-    // 이미 지정해둔 건 그대로 둔다.
-    setOwnerByCharacter((prev) => {
-      const next = { ...prev };
-      for (const r of results) {
-        if (!next[r.character_name]) next[r.character_name] = currentUserId;
-      }
-      return next;
-    });
 
     // 이미 그룹 명단에 있는 보스(이름+난이도 기준)는 기본 선택 해제.
     const initial = new Set<string>();
@@ -240,7 +218,7 @@ export default function ImportBossesFromNexon({
       return {
         project_id: projectId,
         boss_id: bossId,
-        user_id: ownerByCharacter[b.characterName] ?? currentUserId,
+        user_id: currentUserId,
         character_name: b.characterName,
       };
     });
@@ -269,8 +247,9 @@ export default function ImportBossesFromNexon({
         <div>
           <h2 className="font-semibold">넥슨 스케줄러에서 보스 불러오기</h2>
           <p className="label">
-            캐릭터(본캐+부캐, 그룹원 전체)들이 인게임 "스케줄러"에 등록해둔 보스를 한 번에 불러와 후보로 담아둘 수 있어요.
-            이후 보스 명단 아래 "후보 캐릭터"에서 드래그해 파티에 배정하면 돼요.
+            넥슨 스케줄러 등록 정보는 비공개라서, <b>프로필에 연동해둔 내 넥슨 API 키로 내 캐릭터(본캐+부캐)만</b>{" "}
+            불러올 수 있어요 — 다른 사람 캐릭터는 그 사람이 직접 연동해서 불러와야 해요. 불러온 건 아래 "후보
+            캐릭터"에 담기고, 보스 명단 쪽에서 드래그해 파티에 배정하면 돼요.
           </p>
         </div>
         {!open && (
@@ -283,7 +262,7 @@ export default function ImportBossesFromNexon({
       {open && (
         <div className="flex flex-col gap-2">
           <div className="flex flex-col gap-1.5">
-            <p className="label">조회할 캐릭터 (그룹원 누구 캐릭터든 닉네임만 알면 추가 가능)</p>
+            <p className="label">조회할 캐릭터 (내 넥슨 계정의 본캐+부캐만 가능)</p>
             <div className="flex flex-wrap gap-2">
               {characterNames.map((name) => (
                 <span key={name} className="chip">
@@ -346,33 +325,6 @@ export default function ImportBossesFromNexon({
                 <p className="text-muted">
                   등록된 보스가 없어요. 게임 내에서 먼저 스케줄러에 보스를 등록해주세요.
                 </p>
-              )}
-
-              {/* 조회된 캐릭터별로 소속 멤버 지정 */}
-              {characterNames.filter((n) => bosses.some((b) => b.characterName === n)).length > 0 && (
-                <div className="flex flex-col gap-1.5">
-                  <p className="label">캐릭터별 소속 멤버 지정</p>
-                  <div className="flex flex-col gap-1">
-                    {[...new Set(bosses.map((b) => b.characterName))].map((charName) => (
-                      <div key={charName} className="flex items-center justify-between gap-2 text-sm">
-                        <span>{charName}</span>
-                        <select
-                          value={ownerByCharacter[charName] ?? currentUserId}
-                          onChange={(e) =>
-                            setOwnerByCharacter((prev) => ({ ...prev, [charName]: e.target.value }))
-                          }
-                          className="confirm-select"
-                        >
-                          {members.map((m) => (
-                            <option key={m.id} value={m.id}>
-                              {m.name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    ))}
-                  </div>
-                </div>
               )}
 
               <div className="flex flex-col gap-2">

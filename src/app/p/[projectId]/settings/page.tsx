@@ -69,7 +69,6 @@ export default async function ProjectSettingsPage({ params }: { params: { projec
         projectId={project.id}
         existingBosses={(bosses ?? []).map((b) => ({ name: b.name, difficulty: b.difficulty }))}
         myCharacterName={ownProfile?.nexon_character_name ?? null}
-        members={memberList}
         currentUserId={user.id}
       />
       <BossRosterEditor
