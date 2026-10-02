@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { DIFFICULTIES, DIFFICULTY_LABEL } from "@/lib/scheduling/meso";
+import { DIFFICULTIES, DIFFICULTY_LABEL, parseTrailingDifficulty } from "@/lib/scheduling/meso";
 import type { Difficulty } from "@/lib/scheduling/types";
 
 interface Boss {
@@ -48,6 +48,8 @@ export default function BossRosterEditor({ projectId, bosses, parties, members }
   const [newBossDifficulty, setNewBossDifficulty] = useState<Difficulty | "">("");
   const [addingPartyFor, setAddingPartyFor] = useState<string | null>(null);
   const [editingParty, setEditingParty] = useState<Party | null>(null);
+  const [editingBossNameId, setEditingBossNameId] = useState<string | null>(null);
+  const [editingBossNameValue, setEditingBossNameValue] = useState("");
 
   function refresh() {
     router.refresh();
@@ -56,13 +58,19 @@ export default function BossRosterEditor({ projectId, bosses, parties, members }
   function addBoss(e: React.FormEvent) {
     e.preventDefault();
     if (!newBossName.trim()) return;
+    // "세렌 H"처럼 옛날 습관대로 이름에 난이도를 붙여 쳐도, 난이도 드롭다운을
+    // 따로 안 골랐으면 이름에서 떼어내 난이도 필드로 돌려준다 (이름엔 깨끗한
+    // 보스 이름만 남겨서, 메소 계산용 MESO_TABLE 조회가 이름으로 정확히 맞게).
+    const parsed = parseTrailingDifficulty(newBossName);
+    const finalName = newBossDifficulty ? newBossName.trim() : parsed.name;
+    const finalDifficulty = newBossDifficulty || parsed.difficulty || null;
     const sortOrder = bosses.length ? Math.max(...bosses.map((b) => b.sort_order)) + 1 : 0;
     startTransition(async () => {
       await supabase.from("bosses").insert({
         project_id: projectId,
-        name: newBossName.trim(),
+        name: finalName,
         period: newBossPeriod,
-        difficulty: newBossDifficulty || null,
+        difficulty: finalDifficulty,
         sort_order: sortOrder,
       });
       setNewBossName("");
@@ -74,6 +82,26 @@ export default function BossRosterEditor({ projectId, bosses, parties, members }
   function updateBossDifficulty(boss: Boss, difficulty: Difficulty | "") {
     startTransition(async () => {
       await supabase.from("bosses").update({ difficulty: difficulty || null }).eq("id", boss.id);
+      refresh();
+    });
+  }
+
+  function startRenameBoss(boss: Boss) {
+    setEditingBossNameId(boss.id);
+    setEditingBossNameValue(boss.name);
+  }
+
+  function saveBossName(boss: Boss) {
+    const trimmed = editingBossNameValue.trim();
+    setEditingBossNameId(null);
+    if (!trimmed || trimmed === boss.name) return;
+    // 기존에 "세렌 H"처럼 이름에 난이도가 섞여 있던 걸 고치는 경우도 커버:
+    // 아직 난이도가 안 정해져 있으면 뒤에 붙은 난이도 약자를 떼어 준다.
+    const parsed = parseTrailingDifficulty(trimmed);
+    const finalName = boss.difficulty ? trimmed : parsed.name;
+    const finalDifficulty = boss.difficulty ?? parsed.difficulty ?? null;
+    startTransition(async () => {
+      await supabase.from("bosses").update({ name: finalName, difficulty: finalDifficulty }).eq("id", boss.id);
       refresh();
     });
   }
@@ -113,7 +141,7 @@ export default function BossRosterEditor({ projectId, bosses, parties, members }
           <input
             value={newBossName}
             onChange={(e) => setNewBossName(e.target.value)}
-            placeholder="예: 세렌 H"
+            placeholder="예: 세렌 (난이도는 오른쪽에서 따로 선택)"
             className="input"
           />
         </div>
@@ -150,7 +178,7 @@ export default function BossRosterEditor({ projectId, bosses, parties, members }
 
       {bosses.length === 0 && (
         <p className="card text-muted">
-          아직 보스가 없어요. 위에서 그룹이 도는 보스를 하나씩 추가해주세요 (예: 세렌 H, 칼로스 N ...).
+          아직 보스가 없어요. 위에서 그룹이 도는 보스를 하나씩 추가해주세요 (보스 이름만 적고, 난이도는 옆 드롭다운에서 골라주세요).
         </p>
       )}
 
@@ -162,7 +190,27 @@ export default function BossRosterEditor({ projectId, bosses, parties, members }
             <div key={boss.id} className="card flex flex-col gap-2">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <h3 className="font-semibold">{boss.name}</h3>
+                  {editingBossNameId === boss.id ? (
+                    <input
+                      autoFocus
+                      value={editingBossNameValue}
+                      onChange={(e) => setEditingBossNameValue(e.target.value)}
+                      onBlur={() => saveBossName(boss)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") saveBossName(boss);
+                        if (e.key === "Escape") setEditingBossNameId(null);
+                      }}
+                      className="input !w-32 !py-1"
+                    />
+                  ) : (
+                    <h3
+                      className="font-semibold cursor-pointer"
+                      title="눌러서 이름 수정"
+                      onClick={() => startRenameBoss(boss)}
+                    >
+                      {boss.name}
+                    </h3>
+                  )}
                   <select
                     value={boss.difficulty ?? ""}
                     onChange={(e) => updateBossDifficulty(boss, e.target.value as Difficulty | "")}

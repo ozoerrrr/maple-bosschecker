@@ -40,6 +40,35 @@ export function normalizeNexonDifficulty(raw: string | null | undefined): Diffic
   return NEXON_DIFFICULTY_MAP[raw.trim()] ?? null;
 }
 
+// 옛 아티팩트(그리고 손에 익은 습관)는 보스 이름에 난이도 약자를 붙여 썼다
+// ("세렌 H", "칼로스 N" 등 -- bossLabel()의 short 코드). 이제는 난이도가
+// 별도 필드라서, 사람이 보스 이름 입력칸에 이렇게 옛날 습관대로 타이핑해도
+// 이름에서 난이도를 떼어내 별도 필드로 돌려준다. 못 알아보면 원래 문자열을
+// 그대로 이름으로 두고 난이도는 null.
+const SHORT_CODE_TO_DIFFICULTY: Record<string, Difficulty> = {
+  이지: "easy",
+  E: "easy",
+  N: "normal",
+  노말: "normal",
+  노멀: "normal",
+  H: "hard",
+  하드: "hard",
+  C: "chaos",
+  카오스: "chaos",
+  Ex: "extreme",
+  EX: "extreme",
+  익스트림: "extreme",
+};
+
+export function parseTrailingDifficulty(input: string): { name: string; difficulty: Difficulty | null } {
+  const trimmed = input.trim();
+  const m = /^(.*\S)\s+([A-Za-z가-힣]+)$/.exec(trimmed);
+  if (!m) return { name: trimmed, difficulty: null };
+  const code = SHORT_CODE_TO_DIFFICULTY[m[2]] ?? NEXON_DIFFICULTY_MAP[m[2]];
+  if (!code) return { name: trimmed, difficulty: null };
+  return { name: m[1], difficulty: code };
+}
+
 /** 1인당 메소 (null-safe: 테이블에 없는 보스/난이도거나 인원이 0이면 null). */
 export function mesoPerPerson(
   bossName: string,

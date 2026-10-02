@@ -52,27 +52,63 @@ export async function GET(req: NextRequest) {
 
   const apiKey = decryptSecret(profile.nexon_api_key_enc);
 
-  const results = await Promise.all(
-    names.map(async (characterName) => {
-      try {
-        const ocid = await lookupOuid(characterName, apiKey);
-        const { registered, raw } = await fetchRegisteredBossSchedule(ocid, apiKey);
-        return {
-          character_name: raw.character_name,
-          world_name: raw.world_name,
-          bosses: registered.map((b) => ({
-            name: b.content_name,
-            difficulty: b.difficulty,
-            cycle: b.cycle,
-            complete: b.complete_flag === "true",
-          })),
-        };
-      } catch (e) {
-        const message = e instanceof NexonApiError ? e.message : "넥슨 스케줄러 조회 중 오류가 발생했어요.";
-        return { character_name: characterName, world_name: null, bosses: [], error: message };
+  function sleep(ms: number) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  // 넥슨 오픈 API는 짧은 시간에 요청이 몰리면 429(OPENAPI00007 "Please try
+  // again later")를 돌려준다. 캐릭터 하나당 lookupOuid + scheduler 조회로
+  // 호출이 2번씩 나가니, 여러 캐릭터를 Promise.all로 한꺼번에 쏘면 거의 항상
+  // 걸린다. 그래서 캐릭터별로 순차 처리하고, 각 캐릭터 사이에 짧은 간격을
+  // 두고, 429를 맞으면 한 번 더 기다렸다가 재시도한다.
+  type FetchResult = {
+    character_name: string;
+    world_name: string | null;
+    bosses: { name: string; difficulty: string; cycle: string; complete: boolean }[];
+    error?: string;
+  };
+
+  async function fetchOne(characterName: string): Promise<FetchResult> {
+    const attempt = async (): Promise<FetchResult> => {
+      const ocid = await lookupOuid(characterName, apiKey);
+      await sleep(150); // 같은 캐릭터 안에서도 두 호출 사이에 약간 간격
+      const { registered, raw } = await fetchRegisteredBossSchedule(ocid, apiKey);
+      return {
+        character_name: raw.character_name,
+        world_name: raw.world_name,
+        bosses: registered.map((b) => ({
+          name: b.content_name,
+          difficulty: b.difficulty,
+          cycle: b.cycle,
+          complete: b.complete_flag === "true",
+        })),
+      };
+    };
+    try {
+      return await attempt();
+    } catch (e) {
+      if (e instanceof NexonApiError && e.status === 429) {
+        await sleep(1500);
+        try {
+          return await attempt();
+        } catch (e2) {
+          const message =
+            e2 instanceof NexonApiError
+              ? "넥슨 API 요청이 너무 잦아요. 잠시 후 다시 시도해주세요."
+              : "넥슨 스케줄러 조회 중 오류가 발생했어요.";
+          return { character_name: characterName, world_name: null, bosses: [], error: message };
+        }
       }
-    })
-  );
+      const message = e instanceof NexonApiError ? e.message : "넥슨 스케줄러 조회 중 오류가 발생했어요.";
+      return { character_name: characterName, world_name: null, bosses: [], error: message };
+    }
+  }
+
+  const results: FetchResult[] = [];
+  for (let i = 0; i < names.length; i++) {
+    if (i > 0) await sleep(300); // 캐릭터 사이 호출 간격 -- 429 예방
+    results.push(await fetchOne(names[i]));
+  }
 
   const allFailed = results.every((r) => r.error);
   if (allFailed) {
