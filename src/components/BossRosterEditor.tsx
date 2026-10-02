@@ -113,13 +113,6 @@ export default function BossRosterEditor({ projectId, bosses, parties, members, 
     });
   }
 
-  function updateBossDifficulty(boss: Boss, difficulty: Difficulty | "") {
-    startTransition(async () => {
-      await supabase.from("bosses").update({ difficulty: difficulty || null }).eq("id", boss.id);
-      refresh();
-    });
-  }
-
   function startRenameBoss(boss: Boss) {
     setEditingBossNameId(boss.id);
     setEditingBossNameValue(boss.name);
@@ -297,19 +290,14 @@ export default function BossRosterEditor({ projectId, bosses, parties, members, 
                       {boss.name}
                     </h3>
                   )}
-                  <select
-                    value={boss.difficulty ?? ""}
-                    onChange={(e) => updateBossDifficulty(boss, e.target.value as Difficulty | "")}
-                    className="confirm-select"
-                    title="난이도 (메소 계산용)"
-                  >
-                    <option value="">난이도 없음</option>
-                    {DIFFICULTIES.map((d) => (
-                      <option key={d} value={d}>
-                        {DIFFICULTY_LABEL[d]}
-                      </option>
-                    ))}
-                  </select>
+                  {/* [변경] 넥슨에서 불러올 때 캐릭터의 실제 난이도로 보스가 자동으로
+                      나뉘어 들어오게 돼서(예: "스우 익스트림"), 여기서 난이도를 수동으로
+                      다시 고르게 하면 오히려 헷갈려서 읽기 전용 배지로 바꿨다. 난이도를
+                      고치고 싶으면 보스 이름을 눌러 이름을 바꾸면서 "이름 뒤에 난이도"
+                      형식(예: "세렌 하드")으로 적으면 자동으로 분리해 반영된다. */}
+                  {boss.difficulty && (
+                    <span className="period-badge">{DIFFICULTY_LABEL[boss.difficulty]}</span>
+                  )}
                   <span className="period-badge">
                     {boss.period === "monthly" ? "월간" : "주간"}
                   </span>

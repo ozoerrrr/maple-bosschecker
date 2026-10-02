@@ -35,9 +35,19 @@ const NEXON_DIFFICULTY_MAP: Record<string, Difficulty> = {
   "익스트림": "extreme",
 };
 
+const ENGLISH_DIFFICULTIES: Difficulty[] = ["easy", "normal", "hard", "chaos", "extreme"];
+
+// [고침] 넥슨 오픈 API는 실제로는 난이도를 "extreme"/"hard"/"normal"처럼
+// 영문 소문자로 내려준다(한글 "익스트림" 등이 아님) -- 그걸 못 알아봐서
+// normalizedDiff가 항상 null이 되고, 그 결과 (보스이름, null)로 모든 난이도가
+// 한 보스 행에 뭉쳐 들어가던 버그가 있었다. 영문 코드를 1순위로 보고, 혹시
+// 몰라 한글 표기도 계속 같이 받아준다.
 export function normalizeNexonDifficulty(raw: string | null | undefined): Difficulty | null {
   if (!raw) return null;
-  return NEXON_DIFFICULTY_MAP[raw.trim()] ?? null;
+  const trimmed = raw.trim();
+  const lower = trimmed.toLowerCase() as Difficulty;
+  if (ENGLISH_DIFFICULTIES.includes(lower)) return lower;
+  return NEXON_DIFFICULTY_MAP[trimmed] ?? null;
 }
 
 // 옛 아티팩트(그리고 손에 익은 습관)는 보스 이름에 난이도 약자를 붙여 썼다
