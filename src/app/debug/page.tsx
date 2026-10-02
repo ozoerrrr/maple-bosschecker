@@ -20,7 +20,7 @@ export default function DebugPage() {
       if (error) setError(error.message);
       else setResult(data);
 
-      const { data: tryData, error: tryError } = await supabase.rpc("debug_try_insert", {
+      const { data: tryData, error: tryError } = await (supabase.rpc as any)("debug_try_insert", {
         p_name: "디버그테스트",
       });
       if (tryError) setTryInsertError(tryError.message);
