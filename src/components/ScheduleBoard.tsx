@@ -7,6 +7,7 @@ import { buildSnapshot, type RawAvailabilityRow, type RawBoss, type RawConfirmat
 import { formatMeso, mesoPerPerson } from "@/lib/scheduling/meso";
 import AvailabilityGrid from "@/components/AvailabilityGrid";
 import BossList from "@/components/BossList";
+import ImportBossesFromNexon from "@/components/ImportBossesFromNexon";
 
 export interface Member {
   id: string;
@@ -26,6 +27,8 @@ interface Props {
   monthlyBlock: RawMonthlyBlockRow[];
   confirmations: RawConfirmationRow[];
   nextConfirmations: RawNextConfirmationRow[];
+  myCharacterName: string | null;
+  candidates: { id: string; bossId: string; userId: string; characterName: string; memberName: string }[];
 }
 
 // 원본 아티팩트의 weekMode("this"|"next") 토글 + 가능시간 그리드 + 보스
@@ -94,6 +97,16 @@ export default function ScheduleBoard(props: Props) {
 
   return (
     <div className="flex flex-col gap-5">
+      {/* 보스 후보 등록은 그룹장 전용이 아니라 멤버 누구나 자기 캐릭터
+          몫을 올릴 수 있다 -- 실제 파티 배치(드래그 앤 드롭)만 설정 화면에서
+          그룹장이 한다. */}
+      <ImportBossesFromNexon
+        projectId={props.projectId}
+        existingBosses={props.bosses.map((b) => ({ name: b.name, difficulty: b.difficulty }))}
+        myCharacterName={props.myCharacterName}
+        currentUserId={props.currentUserId}
+      />
+
       <div className="card flex flex-col gap-3">
         <div className="flex items-center justify-between">
           <h2 className="font-semibold">내 가능 시간</h2>

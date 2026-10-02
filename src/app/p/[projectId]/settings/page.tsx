@@ -2,7 +2,6 @@ import { redirect } from "next/navigation";
 import { requireProjectMember } from "@/lib/project";
 import BossRosterEditor from "@/components/BossRosterEditor";
 import InviteCodeCard from "@/components/InviteCodeCard";
-import ImportBossesFromNexon from "@/components/ImportBossesFromNexon";
 import DeleteProjectButton from "@/components/DeleteProjectButton";
 import TransferOwnershipButton from "@/components/TransferOwnershipButton";
 
@@ -15,7 +14,6 @@ export default async function ProjectSettingsPage({ params }: { params: { projec
     { data: parties },
     { data: partyMembers },
     { data: members },
-    { data: ownProfile },
     { data: bossCandidates },
   ] = await Promise.all([
     supabase.from("bosses").select("*").eq("project_id", project.id).order("sort_order"),
@@ -27,7 +25,6 @@ export default async function ProjectSettingsPage({ params }: { params: { projec
     // [고침] project_members -> profiles 실제 FK가 없어 임베드가 조용히
     // 빈 결과를 내던 문제 (아래에서 profiles를 따로 불러와 JS로 합침).
     supabase.from("project_members").select("user_id, role").eq("project_id", project.id),
-    supabase.from("profiles").select("nexon_character_name").eq("id", user.id).single(),
     supabase.from("boss_candidates").select("*").eq("project_id", project.id),
   ]);
 
@@ -65,12 +62,6 @@ export default async function ProjectSettingsPage({ params }: { params: { projec
   return (
     <div className="flex flex-col gap-4">
       <InviteCodeCard inviteCode={project.invite_code} members={memberList} />
-      <ImportBossesFromNexon
-        projectId={project.id}
-        existingBosses={(bosses ?? []).map((b) => ({ name: b.name, difficulty: b.difficulty }))}
-        myCharacterName={ownProfile?.nexon_character_name ?? null}
-        currentUserId={user.id}
-      />
       <BossRosterEditor
         projectId={project.id}
         bosses={bosses ?? []}

@@ -15,6 +15,8 @@ export default async function ProjectDashboardPage({ params }: { params: { proje
     { data: monthlyBlock },
     { data: confirmations },
     { data: nextConfirmations },
+    { data: ownProfile },
+    { data: bossCandidates },
   ] = await Promise.all([
     // [고침] project_members -> profiles는 실제 FK가 없어서(둘 다 auth.users를
     // 각자 따로 참조할 뿐) PostgREST가 "profiles(display_name)" 임베드를
@@ -39,6 +41,10 @@ export default async function ProjectDashboardPage({ params }: { params: { proje
       .from("next_party_confirmations")
       .select("party_id, day, hour, parties!inner(project_id)")
       .eq("parties.project_id", projectId),
+    supabase.from("profiles").select("nexon_character_name").eq("id", user.id).single(),
+    // 후보 등록(boss_candidates)은 이제 그룹장 전용이 아니라 멤버 누구나 자기
+    // 캐릭터 몫을 올릴 수 있어서, 메인 스케줄 화면에서도 보여준다.
+    supabase.from("boss_candidates").select("*").eq("project_id", projectId),
   ]);
 
   type MemberRow = { user_id: string; role: string; color: string | null };
@@ -69,6 +75,16 @@ export default async function ProjectDashboardPage({ params }: { params: { proje
     members: partyMembersByParty.get(p.id) ?? [],
   }));
 
+  // boss_candidates에는 user_id만 있고 표시용 이름은 없어서, 위에서 만든
+  // profileNameById로 JS에서 합친다 (settings/page.tsx와 동일 패턴).
+  const candidateList = (bossCandidates ?? []).map((c) => ({
+    id: c.id,
+    bossId: c.boss_id,
+    userId: c.user_id,
+    characterName: c.character_name,
+    memberName: profileNameById.get(c.user_id) ?? "이름없음",
+  }));
+
   return (
     <ScheduleBoard
       projectId={projectId}
@@ -82,6 +98,8 @@ export default async function ProjectDashboardPage({ params }: { params: { proje
       monthlyBlock={monthlyBlock ?? []}
       confirmations={(confirmations ?? []) as any}
       nextConfirmations={(nextConfirmations ?? []) as any}
+      myCharacterName={ownProfile?.nexon_character_name ?? null}
+      candidates={candidateList}
     />
   );
 }
