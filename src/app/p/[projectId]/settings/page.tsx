@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { requireProjectMember } from "@/lib/project";
 import BossRosterEditor from "@/components/BossRosterEditor";
 import InviteCodeCard from "@/components/InviteCodeCard";
+import ImportBossesFromNexon from "@/components/ImportBossesFromNexon";
 
 export default async function ProjectSettingsPage({ params }: { params: { projectId: string } }) {
   const { supabase, project, role } = await requireProjectMember(params.projectId);
@@ -38,6 +39,10 @@ export default async function ProjectSettingsPage({ params }: { params: { projec
   return (
     <div className="flex flex-col gap-4">
       <InviteCodeCard inviteCode={project.invite_code} members={memberList} />
+      <ImportBossesFromNexon
+        projectId={project.id}
+        existingBossNames={(bosses ?? []).map((b) => b.name)}
+      />
       <BossRosterEditor projectId={project.id} bosses={bosses ?? []} parties={partyList} members={memberList} />
     </div>
   );

@@ -39,18 +39,55 @@ async function nexonFetch(path: string, apiKey: string): Promise<unknown> {
   return res.json();
 }
 
-/** 캐릭터 닉네임 -> ouid (넥슨 내부 캐릭터 식별자). */
+/** 캐릭터 닉네임 -> ocid (넥슨 내부 캐릭터 식별자). 공식 문서 필드명은 ocid지만,
+ * 혹시 모를 구버전 응답(ouid)도 같이 받아둔다. */
 export async function lookupOuid(characterName: string, apiKey: string): Promise<string> {
   const data = (await nexonFetch(`/id?character_name=${encodeURIComponent(characterName)}`, apiKey)) as {
+    ocid?: string;
     ouid?: string;
   };
-  if (!data.ouid) throw new NexonApiError("해당 닉네임의 캐릭터를 찾을 수 없어요.");
-  return data.ouid;
+  const id = data.ocid ?? data.ouid;
+  if (!id) throw new NexonApiError("해당 닉네임의 캐릭터를 찾을 수 없어요.");
+  return id;
 }
 
-/** ouid -> 캐릭터 기본 정보(월드, 레벨, 직업 등). */
+export interface NexonBossContent {
+  content_name: string;
+  difficulty: string;
+  cycle: string;
+  list_order_no: number;
+  registration_flag: string; // "true" | "false"
+  complete_flag: string; // "true" | "false"
+}
+
+interface NexonSchedulerCharacterState {
+  date: string;
+  character_name: string;
+  world_name: string;
+  character_level: number;
+  character_class: string;
+  boss_contents?: NexonBossContent[];
+  weekly_boss_clear_count?: number;
+  weekly_boss_clear_limit_count?: number;
+}
+
+/** 캐릭터가 인게임 "스케줄러"에 실제로 등록해둔 보스 목록(완료 여부 포함)을 가져온다.
+ * registration_flag === "true" 인 것만 "이 캐릭터가 도는 보스"로 본다. */
+export async function fetchRegisteredBossSchedule(
+  ocid: string,
+  apiKey: string
+): Promise<{ registered: NexonBossContent[]; raw: NexonSchedulerCharacterState }> {
+  const data = (await nexonFetch(
+    `/scheduler/character-state?ocid=${encodeURIComponent(ocid)}`,
+    apiKey
+  )) as NexonSchedulerCharacterState;
+  const registered = (data.boss_contents ?? []).filter((b) => b.registration_flag === "true");
+  return { registered, raw: data };
+}
+
+/** ocid -> 캐릭터 기본 정보(월드, 레벨, 직업 등). (공식 문서 쿼리 파라미터명은 ocid) */
 export async function fetchCharacterBasic(ouid: string, apiKey: string): Promise<NexonCharacterBasic> {
-  const data = (await nexonFetch(`/character/basic?ouid=${encodeURIComponent(ouid)}`, apiKey)) as Record<
+  const data = (await nexonFetch(`/character/basic?ocid=${encodeURIComponent(ouid)}`, apiKey)) as Record<
     string,
     unknown
   >;
