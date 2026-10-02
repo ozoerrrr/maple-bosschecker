@@ -21,14 +21,16 @@ interface CharacterResult {
   error?: string;
 }
 
-interface ExistingBoss {
+/** 이미 후보 풀(boss_candidates)에 등록돼 있는 (보스이름, 난이도, 캐릭터이름). */
+interface ExistingCandidate {
   name: string;
   difficulty: string | null;
+  characterName: string;
 }
 
 interface Props {
   projectId: string;
-  existingBosses: ExistingBoss[];
+  existingCandidates: ExistingCandidate[];
   /** 프로필에 연동해둔 내 본캐 닉네임. 캐릭터 입력칸의 기본값으로 쓴다. */
   myCharacterName?: string | null;
   currentUserId: string;
@@ -45,14 +47,21 @@ function guessPeriod(name: string, cycle: string): "weekly" | "monthly" {
   return "weekly";
 }
 
-function isAlreadyAdded(existingBosses: ExistingBoss[], b: FetchedBoss): boolean {
+// [고침] "이미 있음"은 "이 보스/난이도가 그룹 명단에 이미 있다"가 아니라
+// "이 캐릭터가 이 보스/난이도에 이미 후보로 등록돼 있다"는 뜻이어야 한다.
+// 전자로 체크하면, 다른 멤버가 이미 같은 보스를 등록해놔서 보스 자체는
+// 명단에 있지만 "나"는 아직 후보로 안 올린 캐릭터에도 "이미 있음"이 잘못
+// 붙어서 혼란스러웠다.
+function isAlreadyAdded(existingCandidates: ExistingCandidate[], b: FetchedBoss): boolean {
   const normalized = normalizeNexonDifficulty(b.difficulty);
-  return existingBosses.some((e) => e.name === b.name && e.difficulty === normalized);
+  return existingCandidates.some(
+    (c) => c.name === b.name && normalizeNexonDifficulty(c.difficulty) === normalized && c.characterName === b.characterName
+  );
 }
 
 export default function ImportBossesFromNexon({
   projectId,
-  existingBosses,
+  existingCandidates,
   myCharacterName,
   currentUserId,
 }: Props) {
@@ -118,7 +127,7 @@ export default function ImportBossesFromNexon({
     // 이미 그룹 명단에 있는 보스(이름+난이도 기준)는 기본 선택 해제.
     const initial = new Set<string>();
     for (const b of allBosses) {
-      if (isAlreadyAdded(existingBosses, b)) continue;
+      if (isAlreadyAdded(existingCandidates, b)) continue;
       initial.add(bossKey(b));
     }
     setSelected(initial);
@@ -337,7 +346,7 @@ export default function ImportBossesFromNexon({
                     <div className="flex flex-wrap gap-2">
                       {g.chars.map((b) => {
                         const key = bossKey(b);
-                        const already = isAlreadyAdded(existingBosses, b);
+                        const already = isAlreadyAdded(existingCandidates, b);
                         return (
                           <label key={key} className={"pill " + (selected.has(key) ? "active" : "")}>
                             <input

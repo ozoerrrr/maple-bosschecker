@@ -68,6 +68,18 @@ export default function ScheduleBoard(props: Props) {
     return (uid: string) => m.get(uid) ?? "?";
   }, [props.members]);
 
+  // 넥슨 import 화면에서 "이미 있음" 표시는 "이 보스/난이도가 그룹 명단에
+  // 있다"가 아니라 "이 캐릭터가 이미 후보로 등록돼 있다"는 뜻이어야 한다 --
+  // 그래서 boss_candidates를 (보스이름, 난이도, 캐릭터이름) 키로 바꿔 넘긴다.
+  const existingCandidates = useMemo(() => {
+    const bossById = new Map(props.bosses.map((b) => [b.id, b]));
+    return props.candidates.flatMap((c) => {
+      const boss = bossById.get(c.bossId);
+      if (!boss) return [];
+      return [{ name: boss.name, difficulty: boss.difficulty, characterName: c.characterName }];
+    });
+  }, [props.candidates, props.bosses]);
+
   // 원본 #my-meso-summary 포팅: 내가 속한 파티 중 메소 테이블에 값이 있는
   // 것만 주간/월간으로 나눠 "잔여 / 총"을 합산한다.
   const mesoSummary = useMemo(() => {
@@ -102,7 +114,7 @@ export default function ScheduleBoard(props: Props) {
           그룹장이 한다. */}
       <ImportBossesFromNexon
         projectId={props.projectId}
-        existingBosses={props.bosses.map((b) => ({ name: b.name, difficulty: b.difficulty }))}
+        existingCandidates={existingCandidates}
         myCharacterName={props.myCharacterName}
         currentUserId={props.currentUserId}
       />
