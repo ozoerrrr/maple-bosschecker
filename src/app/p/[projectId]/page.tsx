@@ -16,10 +16,12 @@ export default async function ProjectDashboardPage({ params }: { params: { proje
     { data: confirmations },
     { data: nextConfirmations },
   ] = await Promise.all([
-    supabase
-      .from("project_members")
-      .select("user_id, role, color, profiles(display_name)")
-      .eq("project_id", projectId),
+    // [고침] project_members -> profiles는 실제 FK가 없어서(둘 다 auth.users를
+    // 각자 따로 참조할 뿐) PostgREST가 "profiles(display_name)" 임베드를
+    // 해석하지 못해 조용히 빈 결과를 돌려주고 있었다 (멤버가 0명으로 보이던
+    // 원인). FK를 새로 만드는 대신, profiles는 아래에서 user_id로 따로 불러와
+    // JS에서 직접 합친다.
+    supabase.from("project_members").select("user_id, role, color").eq("project_id", projectId),
     supabase.from("bosses").select("*").eq("project_id", projectId).order("sort_order"),
     supabase.from("parties").select("*").eq("project_id", projectId).order("sort_order"),
     supabase
@@ -39,10 +41,16 @@ export default async function ProjectDashboardPage({ params }: { params: { proje
       .eq("parties.project_id", projectId),
   ]);
 
-  type MemberRow = { user_id: string; role: string; color: string | null; profiles: { display_name: string } | null };
-  const memberList = ((members ?? []) as unknown as MemberRow[]).map((m) => ({
+  type MemberRow = { user_id: string; role: string; color: string | null };
+  const memberRows = (members ?? []) as MemberRow[];
+  const memberIds = memberRows.map((m) => m.user_id);
+  const { data: memberProfiles } = memberIds.length
+    ? await supabase.from("profiles").select("id, display_name").in("id", memberIds)
+    : { data: [] as { id: string; display_name: string }[] };
+  const profileNameById = new Map((memberProfiles ?? []).map((p) => [p.id, p.display_name]));
+  const memberList = memberRows.map((m) => ({
     id: m.user_id,
-    name: m.profiles?.display_name ?? "이름없음",
+    name: profileNameById.get(m.user_id) ?? "이름없음",
     color: m.color,
   }));
 

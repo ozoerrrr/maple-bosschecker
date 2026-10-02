@@ -17,17 +17,22 @@ export default async function ProjectSettingsPage({ params }: { params: { projec
         .from("party_members")
         .select("party_id, user_id, parties!inner(project_id)")
         .eq("parties.project_id", project.id),
-      supabase
-        .from("project_members")
-        .select("user_id, role, profiles(display_name)")
-        .eq("project_id", project.id),
+      // [고침] project_members -> profiles 실제 FK가 없어 임베드가 조용히
+      // 빈 결과를 내던 문제 (아래에서 profiles를 따로 불러와 JS로 합침).
+      supabase.from("project_members").select("user_id, role").eq("project_id", project.id),
       supabase.from("profiles").select("nexon_character_name").eq("id", user.id).single(),
     ]);
 
-  type MemberRow = { user_id: string; role: string; profiles: { display_name: string } | null };
-  const memberList = ((members ?? []) as unknown as MemberRow[]).map((m) => ({
+  type MemberRow = { user_id: string; role: string };
+  const memberRows = (members ?? []) as MemberRow[];
+  const memberIds = memberRows.map((m) => m.user_id);
+  const { data: memberProfiles } = memberIds.length
+    ? await supabase.from("profiles").select("id, display_name").in("id", memberIds)
+    : { data: [] as { id: string; display_name: string }[] };
+  const profileNameById = new Map((memberProfiles ?? []).map((p) => [p.id, p.display_name]));
+  const memberList = memberRows.map((m) => ({
     id: m.user_id,
-    name: m.profiles?.display_name ?? "이름없음",
+    name: profileNameById.get(m.user_id) ?? "이름없음",
     role: m.role,
   }));
 
