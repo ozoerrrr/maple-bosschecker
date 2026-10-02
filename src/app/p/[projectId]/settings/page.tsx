@@ -4,6 +4,7 @@ import BossRosterEditor from "@/components/BossRosterEditor";
 import InviteCodeCard from "@/components/InviteCodeCard";
 import ImportBossesFromNexon from "@/components/ImportBossesFromNexon";
 import DeleteProjectButton from "@/components/DeleteProjectButton";
+import TransferOwnershipButton from "@/components/TransferOwnershipButton";
 
 export default async function ProjectSettingsPage({ params }: { params: { projectId: string } }) {
   const { supabase, user, project, role } = await requireProjectMember(params.projectId);
@@ -85,6 +86,12 @@ export default async function ProjectSettingsPage({ params }: { params: { projec
         </h2>
         <p className="sub">그룹을 삭제하면 보스/파티/멤버/가능시간/확정 내역이 모두 사라지고 되돌릴 수 없어요.</p>
         <DeleteProjectButton projectId={project.id} projectName={project.name} />
+        <div style={{ borderTop: "1px solid var(--border)", paddingTop: "0.75rem", marginTop: "0.25rem" }}>
+          <TransferOwnershipButton
+            projectId={project.id}
+            members={memberList.filter((m) => m.id !== user.id)}
+          />
+        </div>
       </div>
     </div>
   );
