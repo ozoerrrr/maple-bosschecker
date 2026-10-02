@@ -62,6 +62,7 @@ export type Database = {
           project_id: string;
           name: string;
           period: "weekly" | "monthly";
+          difficulty: "easy" | "normal" | "hard" | "chaos" | "extreme" | null;
           sort_order: number;
           created_at: string;
         };

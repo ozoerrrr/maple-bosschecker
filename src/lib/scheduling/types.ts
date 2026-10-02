@@ -2,11 +2,15 @@ import type { Day } from "./constants";
 
 export type Period = "weekly" | "monthly";
 
+/** 보스 난이도 코드 (meso.ts의 MESO_TABLE 색인에도 쓰인다). */
+export type Difficulty = "easy" | "normal" | "hard" | "chaos" | "extreme";
+
 export interface Boss {
   id: string;
   project_id: string;
   name: string;
   period: Period;
+  difficulty: Difficulty | null;
   sort_order: number;
 }
 

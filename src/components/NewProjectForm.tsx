@@ -60,7 +60,7 @@ export default function NewProjectForm() {
         value={name}
         onChange={(e) => setName(e.target.value)}
         placeholder="그룹 이름 (예: 메이플 보스팟)"
-        className="rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-800"
+        className="input"
       />
       {error && <p className="text-xs text-red-500">{error}</p>}
       <button type="submit" disabled={loading || !name.trim()} className="btn-primary">

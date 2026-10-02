@@ -14,7 +14,7 @@ export default async function ProjectLayout({
     <div className="flex flex-col gap-4">
       <header className="flex items-center justify-between">
         <div>
-          <Link href="/" className="text-xs text-slate-400 hover:underline">
+          <Link href="/" className="text-muted text-xs hover:underline">
             ← 내 그룹
           </Link>
           <h1 className="text-xl font-bold">{project.name}</h1>

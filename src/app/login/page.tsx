@@ -17,7 +17,7 @@ export default function LoginPage() {
     <main className="flex min-h-[70vh] flex-col items-center justify-center gap-6 text-center">
       <div>
         <h1 className="text-2xl font-bold">레이드 스케줄러</h1>
-        <p className="mt-2 text-sm text-slate-500">
+        <p className="mt-2 text-muted">
           구글 계정으로 로그인하면 그룹을 만들거나 초대코드로 참여할 수 있어요.
         </p>
       </div>

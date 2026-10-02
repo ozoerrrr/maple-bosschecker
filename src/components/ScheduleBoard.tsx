@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { buildSnapshot, type RawAvailabilityRow, type RawBoss, type RawConfirmationRow, type RawMonthlyBlockRow, type RawNextConfirmationRow, type RawParty } from "@/lib/scheduling/snapshot";
+import { formatMeso, mesoPerPerson } from "@/lib/scheduling/meso";
 import AvailabilityGrid from "@/components/AvailabilityGrid";
 import BossList from "@/components/BossList";
 
@@ -64,6 +65,29 @@ export default function ScheduleBoard(props: Props) {
     return (uid: string) => m.get(uid) ?? "?";
   }, [props.members]);
 
+  // 원본 #my-meso-summary 포팅: 내가 속한 파티 중 메소 테이블에 값이 있는
+  // 것만 주간/월간으로 나눠 "잔여 / 총"을 합산한다.
+  const mesoSummary = useMemo(() => {
+    const bossById = new Map(props.bosses.map((b) => [b.id, b]));
+    const byPeriod: Record<"weekly" | "monthly", { total: number; remaining: number; count: number }> = {
+      weekly: { total: 0, remaining: 0, count: 0 },
+      monthly: { total: 0, remaining: 0, count: 0 },
+    };
+    for (const p of props.parties) {
+      if (!p.members.includes(props.currentUserId)) continue;
+      const boss = bossById.get(p.boss_id);
+      if (!boss) continue;
+      const perPerson = mesoPerPerson(boss.name, boss.difficulty, p.members.length);
+      if (perPerson == null) continue;
+      const bucket = byPeriod[boss.period];
+      bucket.total += perPerson;
+      bucket.count += 1;
+      const cleared = snapshot.confirmed[p.id]?.cleared ?? false;
+      if (!cleared) bucket.remaining += perPerson;
+    }
+    return byPeriod;
+  }, [props.parties, props.bosses, props.currentUserId, snapshot]);
+
   async function refresh() {
     router.refresh();
   }
@@ -97,6 +121,20 @@ export default function ScheduleBoard(props: Props) {
           )}
           onSaved={refresh}
         />
+        {(mesoSummary.weekly.count > 0 || mesoSummary.monthly.count > 0) && (
+          <div id="my-meso-summary" className="flex flex-col gap-0.5">
+            {mesoSummary.weekly.count > 0 && (
+              <p className="meso-summary">
+                주간 메소: 잔여 {formatMeso(mesoSummary.weekly.remaining)} / 총 {formatMeso(mesoSummary.weekly.total)}
+              </p>
+            )}
+            {mesoSummary.monthly.count > 0 && (
+              <p className="meso-summary">
+                월간 메소: 잔여 {formatMeso(mesoSummary.monthly.remaining)} / 총 {formatMeso(mesoSummary.monthly.total)}
+              </p>
+            )}
+          </div>
+        )}
       </div>
 
       <BossList

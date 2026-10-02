@@ -58,7 +58,7 @@ export default function JoinProjectForm() {
         value={code}
         onChange={(e) => setCode(e.target.value)}
         placeholder="초대코드 입력"
-        className="rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-800"
+        className="input"
       />
       {error && <p className="text-xs text-red-500">{error}</p>}
       <button type="submit" disabled={loading || !code.trim()} className="btn-secondary">

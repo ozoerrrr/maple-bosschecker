@@ -45,7 +45,7 @@ export default function NexonLinkForm({ linkedCharacterName, linkedWorldName }: 
   return (
     <div className="card flex flex-col gap-3">
       <h2 className="font-semibold">넥슨 캐릭터 연동</h2>
-      <p className="text-xs text-slate-500">
+      <p className="label">
         본인의 넥슨 오픈 API 개인 키(
         <a className="underline" href="https://openapi.nexon.com/" target="_blank" rel="noreferrer">
           openapi.nexon.com
@@ -55,7 +55,7 @@ export default function NexonLinkForm({ linkedCharacterName, linkedWorldName }: 
       </p>
 
       {linkedCharacterName ? (
-        <div className="flex items-center justify-between rounded-lg bg-brand-50 px-3 py-2 text-sm dark:bg-brand-900/30">
+        <div className="flex items-center justify-between rounded-lg px-3 py-2 text-sm" style={{ background: "var(--accent-soft)" }}>
           <span>
             연동됨: <b>{linkedCharacterName}</b> ({linkedWorldName})
           </span>
@@ -70,13 +70,13 @@ export default function NexonLinkForm({ linkedCharacterName, linkedWorldName }: 
             onChange={(e) => setApiKey(e.target.value)}
             placeholder="넥슨 오픈 API 개인 키"
             type="password"
-            className="rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-800"
+            className="input"
           />
           <input
             value={characterName}
             onChange={(e) => setCharacterName(e.target.value)}
             placeholder="캐릭터 닉네임"
-            className="rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-800"
+            className="input"
           />
           {error && <p className="text-xs text-red-500">{error}</p>}
           <button type="submit" disabled={loading || !apiKey || !characterName} className="btn-primary">

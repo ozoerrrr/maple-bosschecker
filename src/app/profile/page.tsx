@@ -25,7 +25,7 @@ export default async function ProfilePage() {
         </Link>
       </div>
       <div className="card">
-        <p className="text-sm text-slate-500">이름</p>
+        <p className="text-muted">이름</p>
         <p className="font-medium">{profile?.display_name ?? user.email}</p>
       </div>
       <NexonLinkForm

@@ -3,6 +3,9 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 
+// 임시 디버그 페이지. RLS가 "로그인한 나"를 실제로 어떻게 인식하는지
+// (auth.uid() / auth.role() / JWT 클레임) 그대로 보여준다.
+// 원인 파악 끝나면 이 파일은 지워도 된다.
 export default function DebugPage() {
   const [result, setResult] = useState<unknown>(null);
   const [error, setError] = useState<string | null>(null);

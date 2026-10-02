@@ -28,13 +28,15 @@ export default function InviteCodeCard({ inviteCode, members }: Props) {
           {copied ? "복사됨" : "복사"}
         </button>
       </div>
-      <code className="rounded-lg bg-slate-100 px-3 py-2 text-sm dark:bg-slate-800">{inviteCode}</code>
+      <code className="rounded-lg px-3 py-2 text-sm" style={{ background: "var(--surface2)" }}>
+        {inviteCode}
+      </code>
       <div>
-        <h3 className="mb-1 text-xs font-semibold text-slate-500">멤버 ({members.length})</h3>
+        <h3 className="eyebrow mb-1">멤버 ({members.length})</h3>
         <ul className="flex flex-wrap gap-2">
           {members.map((m) => (
-            <li key={m.id} className="rounded-full bg-slate-100 px-2 py-0.5 text-xs dark:bg-slate-800">
-              {m.name} {m.role === "owner" && <span className="text-brand-500">★</span>}
+            <li key={m.id} className="chip">
+              {m.name} {m.role === "owner" && <span style={{ color: "var(--accent)" }}>★</span>}
             </li>
           ))}
         </ul>

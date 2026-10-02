@@ -4,7 +4,7 @@
 // 쪽(서버 컴포넌트 / route handler)이 Supabase에서 읽어온 스냅샷을 넘긴다.
 import { DAYS, HOURS, type Day } from "./constants";
 import { isAvailable, isAvailableIgnoringBlock, isAvailableNext } from "./availability";
-import { isDayPastThisWeek, parseDateKey, weekdayLabelForDate } from "./dates";
+import { daysInMonth, isDayPastThisWeek, nextMonthOf, parseDateKey, weekdayLabelForDate, ymdKey } from "./dates";
 import { isMonthlyBlockedRaw } from "./dates-block";
 import type {
   AvailabilityMap,
@@ -104,6 +104,53 @@ export function reconcileConfirmed(snap: ScheduleSnapshot): string[] {
     if (!stillOk) toClear.push(p.id);
   }
   return toClear;
+}
+
+export interface MonthlyDateCandidate {
+  date: string; // YYYY-MM-DD
+  hour: number;
+}
+
+/**
+ * 월간보스 파티의 실제 달력 날짜 후보 (원본엔 없던, 이 웹앱 전용 확장).
+ * 오늘부터 이번달 남은 날 + 다음달 전체를 훑으면서, 그 날짜(monthlyBlock)로
+ * 막아둔 멤버가 없고 모든 멤버의 요일 반복 가용성(monthlyBlock은 무시하고
+ * 요일+시간만 봄, isAvailableIgnoringBlock)이 그 요일+시간을 커버하는
+ * 슬롯만 후보로 낸다.
+ *
+ * 알려진 단순화: 원본의 "월간보스가 같은 슬롯을 쓰는 주간파티 확정을 밀어낼
+ * 수 있다"(cap-stealing) 동작은 이번 증분에서 구현하지 않는다 -- capOk/
+ * lockCount 연동 없이 순수 날짜 후보만 나열한다 (월간보스는 주간파티와
+ * 캡 충돌로 막히지 않는다).
+ */
+export function candidateMonthlyDates(
+  snap: ScheduleSnapshot,
+  p: Party,
+  today: Date = new Date()
+): MonthlyDateCandidate[] {
+  const out: MonthlyDateCandidate[] = [];
+  const todayStr = ymdKey(today.getFullYear(), today.getMonth(), today.getDate());
+
+  const thisMonth = { year: today.getFullYear(), month0: today.getMonth() };
+  const nextMonth = nextMonthOf(thisMonth.year, thisMonth.month0);
+
+  for (const { year, month0 } of [thisMonth, nextMonth]) {
+    const numDays = daysInMonth(year, month0);
+    for (let day = 1; day <= numDays; day++) {
+      const dateStr = ymdKey(year, month0, day);
+      if (dateStr < todayStr) continue;
+      const weekday = weekdayLabelForDate(year, month0, day);
+      for (const h of HOURS) {
+        const everyoneFree = p.members.every(
+          (uid) =>
+            !isMonthlyBlockedRaw(snap.monthlyBlock, uid, dateStr) &&
+            isAvailableIgnoringBlock(snap.avail, uid, weekday, h)
+        );
+        if (everyoneFree) out.push({ date: dateStr, hour: h });
+      }
+    }
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------------------

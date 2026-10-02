@@ -3,11 +3,14 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { DIFFICULTIES, DIFFICULTY_LABEL } from "@/lib/scheduling/meso";
+import type { Difficulty } from "@/lib/scheduling/types";
 
 interface Boss {
   id: string;
   name: string;
   period: "weekly" | "monthly";
+  difficulty: Difficulty | null;
   sort_order: number;
 }
 
@@ -42,6 +45,7 @@ export default function BossRosterEditor({ projectId, bosses, parties, members }
 
   const [newBossName, setNewBossName] = useState("");
   const [newBossPeriod, setNewBossPeriod] = useState<"weekly" | "monthly">("weekly");
+  const [newBossDifficulty, setNewBossDifficulty] = useState<Difficulty | "">("");
   const [addingPartyFor, setAddingPartyFor] = useState<string | null>(null);
   const [editingParty, setEditingParty] = useState<Party | null>(null);
 
@@ -54,10 +58,22 @@ export default function BossRosterEditor({ projectId, bosses, parties, members }
     if (!newBossName.trim()) return;
     const sortOrder = bosses.length ? Math.max(...bosses.map((b) => b.sort_order)) + 1 : 0;
     startTransition(async () => {
-      await supabase
-        .from("bosses")
-        .insert({ project_id: projectId, name: newBossName.trim(), period: newBossPeriod, sort_order: sortOrder });
+      await supabase.from("bosses").insert({
+        project_id: projectId,
+        name: newBossName.trim(),
+        period: newBossPeriod,
+        difficulty: newBossDifficulty || null,
+        sort_order: sortOrder,
+      });
       setNewBossName("");
+      setNewBossDifficulty("");
+      refresh();
+    });
+  }
+
+  function updateBossDifficulty(boss: Boss, difficulty: Difficulty | "") {
+    startTransition(async () => {
+      await supabase.from("bosses").update({ difficulty: difficulty || null }).eq("id", boss.id);
       refresh();
     });
   }
@@ -93,23 +109,38 @@ export default function BossRosterEditor({ projectId, bosses, parties, members }
     <div className="flex flex-col gap-4">
       <form onSubmit={addBoss} className="card flex flex-wrap items-end gap-2">
         <div className="flex flex-1 flex-col gap-1">
-          <label className="text-xs text-slate-500">새 보스 이름</label>
+          <label className="label">새 보스 이름</label>
           <input
             value={newBossName}
             onChange={(e) => setNewBossName(e.target.value)}
             placeholder="예: 세렌 H"
-            className="rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-800"
+            className="input"
           />
         </div>
         <div className="flex flex-col gap-1">
-          <label className="text-xs text-slate-500">주기</label>
+          <label className="label">주기</label>
           <select
             value={newBossPeriod}
             onChange={(e) => setNewBossPeriod(e.target.value as "weekly" | "monthly")}
-            className="rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-800"
+            className="input"
           >
             <option value="weekly">주간</option>
             <option value="monthly">월간</option>
+          </select>
+        </div>
+        <div className="flex flex-col gap-1">
+          <label className="label">난이도 (메소 계산용, 선택)</label>
+          <select
+            value={newBossDifficulty}
+            onChange={(e) => setNewBossDifficulty(e.target.value as Difficulty | "")}
+            className="input"
+          >
+            <option value="">없음</option>
+            {DIFFICULTIES.map((d) => (
+              <option key={d} value={d}>
+                {DIFFICULTY_LABEL[d]}
+              </option>
+            ))}
           </select>
         </div>
         <button type="submit" disabled={isPending || !newBossName.trim()} className="btn-primary">
@@ -118,7 +149,7 @@ export default function BossRosterEditor({ projectId, bosses, parties, members }
       </form>
 
       {bosses.length === 0 && (
-        <p className="card text-sm text-slate-500">
+        <p className="card text-muted">
           아직 보스가 없어요. 위에서 그룹이 도는 보스를 하나씩 추가해주세요 (예: 세렌 H, 칼로스 N ...).
         </p>
       )}
@@ -132,7 +163,20 @@ export default function BossRosterEditor({ projectId, bosses, parties, members }
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <h3 className="font-semibold">{boss.name}</h3>
-                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-500 dark:bg-slate-800">
+                  <select
+                    value={boss.difficulty ?? ""}
+                    onChange={(e) => updateBossDifficulty(boss, e.target.value as Difficulty | "")}
+                    className="confirm-select"
+                    title="난이도 (메소 계산용)"
+                  >
+                    <option value="">난이도 없음</option>
+                    {DIFFICULTIES.map((d) => (
+                      <option key={d} value={d}>
+                        {DIFFICULTY_LABEL[d]}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="period-badge">
                     {boss.period === "monthly" ? "월간" : "주간"}
                   </span>
                 </div>
@@ -151,10 +195,10 @@ export default function BossRosterEditor({ projectId, bosses, parties, members }
 
               <div className="flex flex-col gap-1">
                 {bossParties.map((p) => (
-                  <div key={p.id} className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-1.5 text-sm dark:bg-slate-800/50">
+                  <div key={p.id} className="flex items-center justify-between row-sub px-3 py-1.5 text-sm">
                     <div>
                       <span className="font-medium">{p.label || "파티"}</span>{" "}
-                      <span className="text-xs text-slate-400">
+                      <span className="text-muted text-xs">
                         {p.members.map((uid) => members.find((m) => m.id === uid)?.name ?? "?").join(", ") || "멤버 없음"}
                       </span>
                     </div>
@@ -260,22 +304,19 @@ function PartyEditorForm({
   }
 
   return (
-    <div className="flex flex-col gap-2 rounded-lg border border-dashed border-slate-300 p-3 dark:border-slate-700">
+    <div className="flex flex-col gap-2 rounded-lg p-3" style={{ border: "1.5px dashed var(--border)" }}>
       <input
         value={label}
         onChange={(e) => setLabel(e.target.value)}
         placeholder="파티 이름 (선택, 예: 1파티)"
-        className="rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-800"
+        className="input"
       />
       <div className="flex flex-wrap gap-2">
         {members.map((m) => (
           <label
             key={m.id}
             className={
-              "cursor-pointer rounded-full px-3 py-1 text-xs " +
-              (selected.has(m.id)
-                ? "bg-brand-500 text-white"
-                : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300")
+              "pill " + (selected.has(m.id) ? "active" : "")
             }
           >
             <input type="checkbox" className="hidden" checked={selected.has(m.id)} onChange={() => toggleMember(m.id)} />

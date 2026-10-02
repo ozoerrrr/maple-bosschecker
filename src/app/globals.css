@@ -2,30 +2,410 @@
 @tailwind components;
 @tailwind utilities;
 
+/* 원본 Claude Artifact("레이드 시간표")의 디자인 시스템을 그대로 포팅.
+   Maplestory 웹폰트는 아티팩트 전용 파일 버킷에만 있어 여기선 쓸 수 없으므로,
+   헤딩은 손글씨 느낌의 Google Fonts "Gaegu"로, 본문은 일반 시스템 산세리프로
+   대체한다. */
+@import url("https://fonts.googleapis.com/css2?family=Gaegu:wght@400;700&display=swap");
+
 :root {
+  --bg: #eef1fa;
+  --surface: #ffffff;
+  --surface2: #f4f6fc;
+  --border: #dfe3f0;
+  --text: #1b1e2e;
+  --muted: #6b7280;
+  --accent: #c9791a;
+  --accent-soft: rgba(201, 121, 26, 0.14);
+  --avail: #059669;
+  --avail-soft: rgba(5, 150, 105, 0.14);
+  --warn: #b45309;
+  --warn-soft: rgba(180, 83, 9, 0.12);
+  --block: #9ca3af;
+  --block-soft: rgba(156, 163, 175, 0.16);
+  --danger: #dc2626;
+  --danger-soft: rgba(220, 38, 38, 0.14);
+  --shadow: 0 1px 3px rgba(20, 20, 40, 0.08);
+  --badge-edge: rgba(0, 0, 0, 0.35);
   color-scheme: light dark;
 }
 
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #10121c;
+    --surface: #171a27;
+    --surface2: #1f2333;
+    --border: #2a2f42;
+    --text: #eef0fa;
+    --muted: #8890ab;
+    --accent: #f0a83c;
+    --accent-soft: rgba(240, 168, 60, 0.16);
+    --avail: #34d399;
+    --avail-soft: rgba(52, 211, 153, 0.16);
+    --warn: #fbbf24;
+    --warn-soft: rgba(251, 191, 36, 0.12);
+    --block: #4b5262;
+    --block-soft: rgba(75, 82, 98, 0.3);
+    --danger: #f87171;
+    --danger-soft: rgba(248, 113, 113, 0.18);
+    --shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+    --badge-edge: rgba(255, 255, 255, 0.28);
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
 body {
-  @apply bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Pretendard", "Malgun Gothic", -apple-system, sans-serif;
+}
+
+h1,
+h2,
+h3 {
+  font-family: "Gaegu", "Maplestory", "Malgun Gothic", sans-serif;
+  font-weight: 700;
+}
+h1 {
+  font-size: 26px;
+}
+h2 {
+  font-size: 18px;
+}
+h3 {
+  font-size: 15px;
+}
+
+.eyebrow {
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.sub {
+  color: var(--muted);
+  font-size: 13.5px;
+  line-height: 1.5;
 }
 
 .card {
-  @apply rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+  padding: 18px 18px 20px;
 }
 
 .btn {
-  @apply inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  padding: 10px 16px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: filter 0.15s ease, opacity 0.15s ease;
+  border: none;
+}
+.btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
 }
 
-.btn-primary {
-  @apply btn bg-brand-600 text-white hover:bg-brand-700;
+.btn-primary,
+.save-btn {
+  border: none;
+  background: var(--accent);
+  color: #fff;
+}
+.btn-primary:hover:not(:disabled),
+.save-btn:hover:not(:disabled) {
+  filter: brightness(1.05);
 }
 
 .btn-secondary {
-  @apply btn bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700;
+  border: 1.5px solid var(--border);
+  background: var(--surface2);
+  color: var(--text);
+}
+.btn-secondary:hover:not(:disabled) {
+  border-color: var(--accent);
 }
 
+.who-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1.5px solid var(--border);
+  background: var(--surface2);
+  color: var(--text);
+  padding: 8px 14px;
+  border-radius: 999px;
+  font-size: 13.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.who-btn.active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.day-tab {
+  border: 1.5px solid var(--border);
+  background: var(--surface2);
+  color: var(--text);
+  padding: 7px 14px;
+  border-radius: 14px;
+  font-size: 13.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.day-tab.active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.hour-btn,
 .slot-cell {
-  @apply flex h-8 w-full items-center justify-center rounded text-[11px] font-medium transition-colors select-none cursor-pointer;
+  min-width: 32px;
+  height: 32px;
+  width: 100%;
+  border: 1.5px solid var(--border);
+  background: var(--surface);
+  color: var(--muted);
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.1s ease, border-color 0.1s ease, color 0.1s ease;
+}
+.hour-btn:hover,
+.slot-cell:hover {
+  border-color: var(--accent);
+}
+.hour-btn.on,
+.slot-cell.on {
+  background: var(--avail-soft);
+  border-color: var(--avail);
+  color: var(--avail);
+}
+
+.boss-group {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  margin-top: 12px;
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.boss-group-head {
+  width: 100%;
+  border: none;
+  background: var(--surface2);
+  padding: 9px 14px;
+  font-weight: 700;
+  font-size: 15px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.boss-group-chevron {
+  display: inline-block;
+  color: var(--muted);
+  font-size: 11px;
+  transition: transform 0.15s ease;
+  flex: none;
+}
+.boss-group-chevron.open {
+  transform: rotate(90deg);
+}
+
+.boss-group-body[hidden] {
+  display: none;
+}
+
+.party-row {
+  padding: 12px 14px;
+  border-top: 1px solid var(--border);
+}
+.party-row:first-child {
+  border-top: none;
+}
+.party-row--mine {
+  background: var(--accent-soft);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  padding: 3px 9px 3px 6px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+}
+.chip.me {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.chip.chip--fixed {
+  border-color: var(--avail);
+  background: var(--avail-soft);
+  color: var(--avail);
+}
+
+.dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  flex: none;
+}
+
+.status-text {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+}
+.status-text.fixed,
+.status-text.ready {
+  color: var(--avail);
+}
+.status-text.done {
+  color: var(--warn);
+}
+
+.confirm-select {
+  border: 1.5px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  padding: 7px 10px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  font-weight: 700;
+}
+
+.clear-btn {
+  border: 1.5px solid var(--warn);
+  background: var(--warn-soft);
+  color: var(--warn);
+  padding: 6px 11px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.diff-badge {
+  display: inline-block;
+  vertical-align: 2px;
+  margin-left: 2px;
+  padding: 2px 7px;
+  border-radius: 4px;
+  border: 1px solid var(--badge-edge);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+.diff-easy {
+  background-color: #8b9099;
+  color: #fff;
+}
+.diff-normal {
+  background-color: #2563eb;
+  color: #fff;
+}
+.diff-hard {
+  background-color: #c81e1e;
+  color: #fff;
+}
+.diff-chaos {
+  background-color: #1a1a1a;
+  color: #f2c14e;
+}
+.diff-extreme {
+  background-color: #1a1a1a;
+  color: #ff3b3b;
+}
+
+.period-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  background: var(--surface2);
+  color: var(--muted);
+  border: 1px solid var(--border);
+}
+
+.party-meso {
+  width: 100%;
+  font-size: 11.5px;
+  color: var(--accent);
+  font-weight: 700;
+  margin-top: 4px;
+}
+
+.meso-summary {
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+/* ---- 설정 화면 폼류에 쓰이는 보조 유틸 클래스 ---- */
+.input {
+  border: 1.5px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  border-radius: 10px;
+  padding: 9px 12px;
+  font-size: 13.5px;
+}
+.input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.text-muted {
+  color: var(--muted);
+}
+
+.pill {
+  cursor: pointer;
+  border-radius: 999px;
+  padding: 6px 13px;
+  font-size: 12.5px;
+  font-weight: 700;
+  background: var(--surface2);
+  color: var(--muted);
+  border: 1.5px solid var(--border);
+}
+.pill.active {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.row-sub {
+  background: var(--surface2);
+  border-radius: 10px;
 }

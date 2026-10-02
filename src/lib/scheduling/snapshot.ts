@@ -2,13 +2,14 @@
 // 모양으로 조립하는 헬퍼. 서버 컴포넌트와 클라이언트 컴포넌트 양쪽에서 다
 // 쓸 수 있도록 입력은 전부 평범한 배열/객체(직렬화 가능)로 받는다.
 import { DEFAULT_MAX_PER_HOUR } from "./constants";
-import type { AvailabilityMap, ConfirmationMap, MonthlyBlockMap, NextConfirmationMap, Party } from "./types";
+import type { AvailabilityMap, ConfirmationMap, Difficulty, MonthlyBlockMap, NextConfirmationMap, Party } from "./types";
 import type { ScheduleSnapshot } from "./parties";
 
 export interface RawBoss {
   id: string;
   name: string;
   period: "weekly" | "monthly";
+  difficulty: Difficulty | null;
   sort_order: number;
 }
 
