@@ -52,7 +52,6 @@ export default function ScheduleBoard(props: Props) {
   const [isTimeModalOpen, setIsTimeModalOpen] = useState(false);
   const [countdown, setCountdown] = useState("D-0 00:00:00");
 
-  // 매주 목요일 00:00 리셋 카운트다운
   useEffect(() => {
     const updateCountdown = () => {
       const now = new Date();
@@ -142,7 +141,6 @@ export default function ScheduleBoard(props: Props) {
     router.refresh();
   }
 
-  // 현재 사용자의 입력된 가능 시간 개수
   const mySlotsCount = useMemo(() => {
     const targetAvail = weekMode === "this" ? props.availability : props.nextAvailability;
     return targetAvail.filter((r) => r.user_id === props.currentUserId).length;
@@ -301,7 +299,7 @@ export default function ScheduleBoard(props: Props) {
               </button>
             </div>
 
-            {/* 모달 내용: 기존 검증된 AvailabilityGrid 그대로 탑재 */}
+            {/* 모달 내용: AvailabilityGrid 탑재 */}
             <div className="p-6 overflow-y-auto">
               <AvailabilityGrid
                 projectId={props.projectId}
