@@ -2,135 +2,150 @@
 @tailwind components;
 @tailwind utilities;
 
-/* 🍁 메이플 오렌지 & 모던 미니멀 화이트 팔레트 (다크모드 강제 오버라이드) */
-:root,
-:root:not([data-theme="light"]),
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #F6F8FB !important;
-    --surface: #FFFFFF !important;
-    --surface2: #F8FAFC !important;
-    --border: #E2E8F0 !important;
-    --text: #1E293B !important;
-    --muted: #64748B !important;
-    --accent: #FF7B29 !important;
-    --accent-soft: rgba(255, 123, 41, 0.12) !important;
-    --avail: #10B981 !important;
-    --avail-soft: rgba(16, 185, 129, 0.14) !important;
-    --warn: #F59E0B !important;
-    --warn-soft: rgba(245, 158, 11, 0.14) !important;
-    --danger: #EF4444 !important;
-    --danger-soft: rgba(239, 68, 68, 0.14) !important;
-    --shadow: 0 1px 3px rgba(35, 41, 54, 0.04), 0 1px 2px rgba(35, 41, 54, 0.02) !important;
-    color-scheme: light !important;
-  }
+@import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css');
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700;800&display=swap');
+
+:root {
+  /* Maple Palette & Theme Tokens */
+  --maple-orange: #FF7B29;
+  --maple-orange-hover: #F26A14;
+  --maple-orange-soft: #FFF2E8;
+  --maple-orange-light: #FFF8F3;
+  --maple-yellow: #FFB300;
+  --maple-yellow-soft: #FFF8E1;
+  --maple-brown: #3C2B20;
+  
+  /* UI Neutral Backgrounds */
+  --bg-page: #F6F8FB;
+  --bg-card: #FFFFFF;
+  --bg-subtle: #F1F4F9;
+  --bg-hover: #EBF0F7;
+
+  /* Borders & Shadows */
+  --border-color: #E2E8F0;
+  --border-focus: #FF7B29;
+  --shadow-sm: 0 1px 3px rgba(35, 41, 54, 0.04), 0 1px 2px rgba(35, 41, 54, 0.02);
+  --shadow-md: 0 4px 14px rgba(35, 41, 54, 0.06), 0 2px 6px rgba(35, 41, 54, 0.03);
+  --shadow-lg: 0 14px 34px -4px rgba(35, 41, 54, 0.12), 0 6px 14px -2px rgba(35, 41, 54, 0.04);
+
+  /* Text Colors */
+  --text-main: #1E293B;
+  --text-muted: #64748B;
+  --text-sub: #94A3B8;
+
+  /* 기존 프로젝트 변수 강제 덮어쓰기 */
+  --bg: #F6F8FB !important;
+  --surface: #FFFFFF !important;
+  --surface2: #F8FAFC !important;
+  --border: #E2E8F0 !important;
+  --text: #1E293B !important;
+  --muted: #64748B !important;
+  --accent: #FF7B29 !important;
+  --accent-soft: rgba(255, 123, 41, 0.12) !important;
 }
 
 * {
   box-sizing: border-box;
-}
-
-html, body {
-  background-color: #F6F8FB !important;
-  color: #1E293B !important;
-  min-height: 100vh;
-  font-family: -apple-system, BlinkMacSystemFont, "Pretendard Variable", Pretendard, Roboto, sans-serif !important;
+  font-family: "Pretendard Variable", -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
 
-/* 1. 모든 카드 스타일 (둥근 모서리 & 소프트 그림자) */
-.card,
-.boss-group {
-  background-color: #FFFFFF !important;
-  border: 1px solid #E2E8F0 !important;
-  border-radius: 18px !important;
-  padding: 20px !important;
-  box-shadow: 0 1px 4px rgba(35, 41, 54, 0.04) !important;
-  color: #1E293B !important;
+body {
+  background-color: var(--bg-page) !important;
+  color: var(--text-main) !important;
+  min-height: 100vh;
+  line-height: 1.5;
 }
 
-/* 2. 메인 오렌지 버튼 */
+/* 카드 (보내주신 HTML 규격: 14px border-radius, 화이트, shadow-sm) */
+.card {
+  background: #FFFFFF !important;
+  border-radius: 16px !important;
+  border: 1px solid var(--border-color) !important;
+  box-shadow: var(--shadow-sm) !important;
+  padding: 20px 24px !important;
+  color: var(--text-main) !important;
+  transition: all 0.2s ease !important;
+}
+.card:hover {
+  border-color: #CBD5E1 !important;
+  box-shadow: var(--shadow-md) !important;
+}
+
+/* 버튼: btn-primary */
 .btn-primary,
-.save-btn {
+button[type="submit"].btn-primary,
+button.save-btn {
   background: linear-gradient(135deg, #FF8438, #FF661A) !important;
-  color: #FFFFFF !important;
-  border: none !important;
-  border-radius: 10px !important;
-  padding: 8px 18px !important;
-  font-weight: 700 !important;
+  color: white !important;
+  border: 1px solid transparent !important;
+  border-radius: 9px !important;
+  padding: 8px 16px !important;
   font-size: 13.5px !important;
+  font-weight: 600 !important;
   box-shadow: 0 3px 10px rgba(255, 110, 30, 0.28) !important;
   cursor: pointer !important;
-  transition: all 0.15s ease !important;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
 }
 .btn-primary:hover,
-.save-btn:hover {
+button.save-btn:hover {
   background: linear-gradient(135deg, #F97425, #EE580B) !important;
   transform: translateY(-1px) !important;
   box-shadow: 0 5px 14px rgba(255, 110, 30, 0.38) !important;
 }
 
-/* 3. 보조 버튼 */
-.btn-secondary {
-  background-color: #FFFFFF !important;
-  border: 1px solid #E2E8F0 !important;
-  color: #64748B !important;
-  border-radius: 10px !important;
+/* 버튼: btn-secondary / btn-outline */
+.btn-secondary,
+.btn-outline {
+  background: white !important;
+  border: 1px solid var(--border-color) !important;
+  color: var(--text-muted) !important;
+  border-radius: 9px !important;
   padding: 8px 16px !important;
-  font-weight: 600 !important;
   font-size: 13.5px !important;
+  font-weight: 600 !important;
   cursor: pointer !important;
-  transition: all 0.15s ease !important;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
 }
-.btn-secondary:hover {
+.btn-secondary:hover,
+.btn-outline:hover {
   border-color: #CBD5E1 !important;
-  color: #1E293B !important;
-  background-color: #F8FAFC !important;
+  color: var(--text-main) !important;
+  background: var(--bg-subtle) !important;
 }
 
-/* 4. 시간표 슬롯 셀 스타일 (.slot-cell) */
+/* 시간표 슬롯 셀 (Slot Cell) */
 .slot-cell {
-  background-color: #FFFFFF !important;
-  border: 1px solid #E2E8F0 !important;
-  border-radius: 6px !important;
-  transition: all 0.1s ease !important;
+  background-color: white !important;
+  border: 1px solid var(--border-color) !important;
+  border-radius: 8px !important;
+  transition: all 0.12s ease !important;
 }
 .slot-cell:hover {
-  background-color: #FFF7ED !important;
-  border-color: #FED7AA !important;
+  border-color: #CBD5E1 !important;
+  background: #F8FAFC !important;
 }
 .slot-cell.on {
-  background-color: #FF7B29 !important;
-  border-color: #EA580C !important;
-  box-shadow: 0 1px 4px rgba(255, 123, 41, 0.35) !important;
+  background: #FFF2E8 !important;
+  border-color: var(--maple-orange) !important;
+  box-shadow: 0 1px 4px rgba(255, 123, 41, 0.2) !important;
 }
 
-/* 5. 텍스트 및 서브 타이틀 보정 */
+/* 텍스트 & 인풋 */
 .text-muted, .sub {
-  color: #64748B !important;
-}
-h1, h2, h3, h4, strong {
-  color: #0F172A !important;
+  color: var(--text-muted) !important;
 }
 
-/* 6. 입력 인풋 & 셀렉트 박스 */
 input, select, textarea {
-  background-color: #FFFFFF !important;
-  border: 1px solid #CBD5E1 !important;
-  border-radius: 10px !important;
-  color: #1E293B !important;
-  padding: 9px 13px !important;
+  background: #F8FAFC !important;
+  border: 1px solid var(--border-color) !important;
+  border-radius: 9px !important;
+  padding: 8px 14px !important;
+  font-size: 13.5px !important;
+  color: var(--text-main) !important;
   outline: none !important;
 }
 input:focus, select:focus {
-  border-color: #FF7B29 !important;
-  box-shadow: 0 0 0 3px rgba(255, 123, 41, 0.15) !important;
-}
-
-/* 7. 보스 파티 행 스타일 */
-.party-row,
-.row-sub {
-  background-color: #F8FAFC !important;
-  border: 1px solid #E2E8F0 !important;
-  border-radius: 12px !important;
+  border-color: var(--maple-orange) !important;
+  background: white !important;
 }
