@@ -1,9 +1,17 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { buildSnapshot, type RawAvailabilityRow, type RawBoss, type RawConfirmationRow, type RawMonthlyBlockRow, type RawNextConfirmationRow, type RawParty } from "@/lib/scheduling/snapshot";
+import {
+  buildSnapshot,
+  type RawAvailabilityRow,
+  type RawBoss,
+  type RawConfirmationRow,
+  type RawMonthlyBlockRow,
+  type RawNextConfirmationRow,
+  type RawParty,
+} from "@/lib/scheduling/snapshot";
 import { formatMeso, mesoPerPerson } from "@/lib/scheduling/meso";
 import AvailabilityGrid from "@/components/AvailabilityGrid";
 import BossList from "@/components/BossList";
@@ -28,25 +36,48 @@ interface Props {
   confirmations: RawConfirmationRow[];
   nextConfirmations: RawNextConfirmationRow[];
   myCharacterName: string | null;
-  candidates: { id: string; bossId: string; userId: string; characterName: string; memberName: string }[];
+  candidates: {
+    id: string;
+    bossId: string;
+    userId: string;
+    characterName: string;
+    memberName: string;
+  }[];
 }
 
-// 원본 아티팩트의 weekMode("this"|"next") 토글 + 가능시간 그리드 + 보스
-// 목록을 한 화면에서 묶는 컨테이너. 서버 컴포넌트(page.tsx)가 떠온 스냅샷을
-// 그대로 받아 클라이언트에서 후보 슬롯 계산(순수 함수, scheduling/parties.ts)만
-// 다시 하고, 모든 쓰기는 Supabase에 바로 반영한 뒤 router.refresh()로 서버
-// 스냅샷을 다시 받아온다 (원본의 "다 고른 다음 변경사항 저장" 발행 방식과
-// 달리, 매 조작이 즉시 저장되는 구조).
 export default function ScheduleBoard(props: Props) {
   const router = useRouter();
   const supabase = createClient();
   const [weekMode, setWeekMode] = useState<"this" | "next">("this");
+  const [isTimeModalOpen, setIsTimeModalOpen] = useState(false);
+  const [countdown, setCountdown] = useState("D-0 00:00:00");
 
-  const bossPeriodMap = useMemo(() => {
-    const m: Record<string, "weekly" | "monthly"> = {};
-    for (const b of props.bosses) m[b.id] = b.period;
-    return m;
-  }, [props.bosses]);
+  // 매주 목요일 00:00 리셋 카운트다운
+  useEffect(() => {
+    const updateCountdown = () => {
+      const now = new Date();
+      const day = now.getDay();
+      const diffDays = (4 - day + 7) % 7 || 7;
+      const target = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate() + diffDays,
+        0,
+        0,
+        0
+      );
+      const diffMs = target.getTime() - now.getTime();
+      const d = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+      const h = String(Math.floor((diffMs / (1000 * 60 * 60)) % 24)).padStart(2, "0");
+      const m = String(Math.floor((diffMs / (1000 * 60)) % 60)).padStart(2, "0");
+      const s = String(Math.floor((diffMs / 1000) % 60)).padStart(2, "0");
+      setCountdown(`D-${d} ${h}:${m}:${s}`);
+    };
+
+    updateCountdown();
+    const timer = setInterval(updateCountdown, 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   const { snapshot } = useMemo(
     () =>
@@ -68,23 +99,27 @@ export default function ScheduleBoard(props: Props) {
     return (uid: string) => m.get(uid) ?? "?";
   }, [props.members]);
 
-  // 넥슨 import 화면에서 "이미 있음" 표시는 "이 보스/난이도가 그룹 명단에
-  // 있다"가 아니라 "이 캐릭터가 이미 후보로 등록돼 있다"는 뜻이어야 한다 --
-  // 그래서 boss_candidates를 (보스이름, 난이도, 캐릭터이름) 키로 바꿔 넘긴다.
   const existingCandidates = useMemo(() => {
     const bossById = new Map(props.bosses.map((b) => [b.id, b]));
     return props.candidates.flatMap((c) => {
       const boss = bossById.get(c.bossId);
       if (!boss) return [];
-      return [{ name: boss.name, difficulty: boss.difficulty, characterName: c.characterName }];
+      return [
+        {
+          name: boss.name,
+          difficulty: boss.difficulty,
+          characterName: c.characterName,
+        },
+      ];
     });
   }, [props.candidates, props.bosses]);
 
-  // 원본 #my-meso-summary 포팅: 내가 속한 파티 중 메소 테이블에 값이 있는
-  // 것만 주간/월간으로 나눠 "잔여 / 총"을 합산한다.
   const mesoSummary = useMemo(() => {
     const bossById = new Map(props.bosses.map((b) => [b.id, b]));
-    const byPeriod: Record<"weekly" | "monthly", { total: number; remaining: number; count: number }> = {
+    const byPeriod: Record<
+      "weekly" | "monthly",
+      { total: number; remaining: number; count: number }
+    > = {
       weekly: { total: 0, remaining: 0, count: 0 },
       monthly: { total: 0, remaining: 0, count: 0 },
     };
@@ -107,11 +142,39 @@ export default function ScheduleBoard(props: Props) {
     router.refresh();
   }
 
+  // 현재 사용자의 입력된 가능 시간 개수
+  const mySlotsCount = useMemo(() => {
+    const targetAvail = weekMode === "this" ? props.availability : props.nextAvailability;
+    return targetAvail.filter((r) => r.user_id === props.currentUserId).length;
+  }, [props.availability, props.nextAvailability, props.currentUserId, weekMode]);
+
   return (
-    <div className="flex flex-col gap-5">
-      {/* 보스 후보 등록은 그룹장 전용이 아니라 멤버 누구나 자기 캐릭터
-          몫을 올릴 수 있다 -- 실제 파티 배치(드래그 앤 드롭)만 설정 화면에서
-          그룹장이 한다. */}
+    <div className="flex flex-col gap-6 max-w-5xl mx-auto w-full pb-16 font-sans">
+      {/* 1. 상단 안내 및 리셋 카운트다운 배너 */}
+      <section className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 rounded-2xl bg-gradient-to-br from-orange-50/90 to-amber-50/50 border border-orange-200/80 shadow-sm">
+        <div>
+          <h1 className="text-lg font-extrabold text-orange-950 flex items-center gap-2">
+            <span>🍁</span>
+            <span>주간 보스 레이드 스케줄러</span>
+          </h1>
+          <p className="text-xs sm:text-sm text-orange-800/90 mt-1">
+            파티원 가능 시간을 기반으로 겹치는 최적 시간대를 자동으로 계산하여 추천합니다.
+          </p>
+        </div>
+        <div className="flex items-center gap-3 self-start sm:self-auto bg-white px-4 py-2.5 rounded-xl border border-orange-200/80 shadow-sm">
+          <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+          <div>
+            <div className="text-[11px] font-semibold text-orange-900/80">
+              주간 리셋 (매주 목요일 00:00)
+            </div>
+            <div className="text-sm font-bold text-orange-600 font-mono">
+              {countdown}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 2. 내 캐릭터 후보 등록 (넥슨 연동) */}
       <ImportBossesFromNexon
         projectId={props.projectId}
         existingCandidates={existingCandidates}
@@ -119,49 +182,88 @@ export default function ScheduleBoard(props: Props) {
         currentUserId={props.currentUserId}
       />
 
-      <div className="card flex flex-col gap-3">
-        <div className="flex items-center justify-between">
-          <h2 className="font-semibold">내 가능 시간</h2>
-          <div className="flex gap-1 text-xs">
+      {/* 3. 내 상태 및 가능 시간 설정 퀵 바 (팝업 트리거) */}
+      <section className="flex flex-wrap items-center justify-between gap-4 p-4 rounded-2xl bg-white border border-slate-200/90 shadow-sm">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-bold text-slate-800">
+              👤 {memberName(props.currentUserId)} 님
+            </span>
+            {props.myCharacterName && (
+              <span className="text-xs px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 border border-slate-200">
+                {props.myCharacterName}
+              </span>
+            )}
+          </div>
+
+          <div className="h-4 w-[1px] bg-slate-200 hidden sm:block" />
+
+          {/* 주차 선택 탭 */}
+          <div className="inline-flex p-1 rounded-xl bg-slate-100 border border-slate-200/60">
             <button
               onClick={() => setWeekMode("this")}
-              className={weekMode === "this" ? "btn-primary !px-3 !py-1" : "btn-secondary !px-3 !py-1"}
+              className={`px-3 py-1 text-xs font-bold rounded-lg transition-all ${
+                weekMode === "this"
+                  ? "bg-white text-orange-600 shadow-sm"
+                  : "text-slate-500 hover:text-slate-800"
+              }`}
             >
               이번주
             </button>
             <button
               onClick={() => setWeekMode("next")}
-              className={weekMode === "next" ? "btn-primary !px-3 !py-1" : "btn-secondary !px-3 !py-1"}
+              className={`px-3 py-1 text-xs font-bold rounded-lg transition-all ${
+                weekMode === "next"
+                  ? "bg-white text-orange-600 shadow-sm"
+                  : "text-slate-500 hover:text-slate-800"
+              }`}
             >
               다음주 미리입력
             </button>
           </div>
         </div>
-        <AvailabilityGrid
-          projectId={props.projectId}
-          userId={props.currentUserId}
-          weekMode={weekMode}
-          initialSlots={(weekMode === "this" ? props.availability : props.nextAvailability).filter(
-            (r) => r.user_id === props.currentUserId
-          )}
-          onSaved={refresh}
-        />
-        {(mesoSummary.weekly.count > 0 || mesoSummary.monthly.count > 0) && (
-          <div id="my-meso-summary" className="flex flex-col gap-0.5">
-            {mesoSummary.weekly.count > 0 && (
-              <p className="meso-summary">
-                주간 메소: 잔여 {formatMeso(mesoSummary.weekly.remaining)} / 총 {formatMeso(mesoSummary.weekly.total)}
-              </p>
-            )}
-            {mesoSummary.monthly.count > 0 && (
-              <p className="meso-summary">
-                월간 메소: 잔여 {formatMeso(mesoSummary.monthly.remaining)} / 총 {formatMeso(mesoSummary.monthly.total)}
-              </p>
-            )}
-          </div>
-        )}
-      </div>
 
+        <div className="flex items-center gap-3 ml-auto">
+          <span className="text-xs text-slate-500">
+            등록된 가능 시간:{" "}
+            <strong className="text-orange-600 font-bold">{mySlotsCount}개</strong>
+          </span>
+          <button
+            onClick={() => setIsTimeModalOpen(true)}
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-orange-500 to-orange-600 text-white shadow-md shadow-orange-500/20 hover:from-orange-600 hover:to-orange-700 transition active:scale-95"
+          >
+            <span>🕒</span>
+            <span>내 가능 시간 설정</span>
+          </button>
+        </div>
+      </section>
+
+      {/* 메소 요약 배지 */}
+      {(mesoSummary.weekly.count > 0 || mesoSummary.monthly.count > 0) && (
+        <section className="flex flex-wrap items-center gap-3 p-3.5 rounded-xl bg-slate-50 border border-slate-200/70 text-xs">
+          <span className="font-bold text-slate-700">💰 예상 메소 수익:</span>
+          {mesoSummary.weekly.count > 0 && (
+            <div className="px-2.5 py-1 rounded-md bg-white border border-slate-200 text-slate-600">
+              주간 잔여:{" "}
+              <strong className="text-orange-600">
+                {formatMeso(mesoSummary.weekly.remaining)}
+              </strong>{" "}
+              / 총 {formatMeso(mesoSummary.weekly.total)}
+            </div>
+          )}
+          {mesoSummary.monthly.count > 0 && (
+            <div className="px-2.5 py-1 rounded-md bg-white border border-slate-200 text-slate-600">
+              월간 잔여:{" "}
+              <strong className="text-purple-600">
+                {formatMeso(mesoSummary.monthly.remaining)}
+              </strong>{" "}
+              / 총 {formatMeso(mesoSummary.monthly.total)}
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* 4. 보스 파티 일정 목록 */}
       <BossList
         projectId={props.projectId}
         maxPerHour={props.maxPerHour}
@@ -173,6 +275,58 @@ export default function ScheduleBoard(props: Props) {
         memberName={memberName}
         onChanged={refresh}
       />
+
+      {/* 5. [내 가능 시간 설정] 팝업 모달 */}
+      {isTimeModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-in fade-in duration-150"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setIsTimeModalOpen(false);
+          }}
+        >
+          <div className="w-full max-w-3xl max-h-[90vh] flex flex-col bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden animate-in zoom-in-95 duration-150">
+            {/* 모달 헤더 */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-gradient-to-b from-white to-slate-50">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">🕒</span>
+                <h3 className="text-base sm:text-lg font-bold text-slate-900">
+                  내 가능 시간 설정 ({weekMode === "this" ? "이번주" : "다음주 미리입력"})
+                </h3>
+              </div>
+              <button
+                onClick={() => setIsTimeModalOpen(false)}
+                className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* 모달 내용: 기존 검증된 AvailabilityGrid 그대로 탑재 */}
+            <div className="p-6 overflow-y-auto">
+              <AvailabilityGrid
+                projectId={props.projectId}
+                userId={props.currentUserId}
+                weekMode={weekMode}
+                initialSlots={(weekMode === "this"
+                  ? props.availability
+                  : props.nextAvailability
+                ).filter((r) => r.user_id === props.currentUserId)}
+                onSaved={refresh}
+              />
+            </div>
+
+            {/* 모달 닫기 푸터 */}
+            <div className="flex items-center justify-end px-6 py-3.5 bg-slate-50 border-t border-slate-200">
+              <button
+                onClick={() => setIsTimeModalOpen(false)}
+                className="px-5 py-2 text-xs sm:text-sm font-bold rounded-xl bg-orange-500 hover:bg-orange-600 text-white shadow-sm transition"
+              >
+                완료 및 닫기
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
