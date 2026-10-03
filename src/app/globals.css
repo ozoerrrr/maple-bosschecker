@@ -2,58 +2,75 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --bg-page: #F6F8FB;
-  --bg-card: #FFFFFF;
-  --border: #E2E8F0;
-  --accent: #FF7B29;
-  --accent-hover: #F26A14;
-  --text-main: #1E293B;
-  --text-muted: #64748B;
+/* 🍁 메이플 오렌지 & 모던 미니멀 화이트 팔레트 (다크모드 강제 오버라이드) */
+:root,
+:root:not([data-theme="light"]),
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #F6F8FB !important;
+    --surface: #FFFFFF !important;
+    --surface2: #F8FAFC !important;
+    --border: #E2E8F0 !important;
+    --text: #1E293B !important;
+    --muted: #64748B !important;
+    --accent: #FF7B29 !important;
+    --accent-soft: rgba(255, 123, 41, 0.12) !important;
+    --avail: #10B981 !important;
+    --avail-soft: rgba(16, 185, 129, 0.14) !important;
+    --warn: #F59E0B !important;
+    --warn-soft: rgba(245, 158, 11, 0.14) !important;
+    --danger: #EF4444 !important;
+    --danger-soft: rgba(239, 68, 68, 0.14) !important;
+    --shadow: 0 1px 3px rgba(35, 41, 54, 0.04), 0 1px 2px rgba(35, 41, 54, 0.02) !important;
+    color-scheme: light !important;
+  }
 }
 
 * {
   box-sizing: border-box;
 }
 
-body {
-  background-color: var(--bg-page);
-  color: var(--text-main);
+html, body {
+  background-color: #F6F8FB !important;
+  color: #1E293B !important;
   min-height: 100vh;
-  font-family: -apple-system, BlinkMacSystemFont, "Pretendard", Roboto, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Pretendard Variable", Pretendard, Roboto, sans-serif !important;
   -webkit-font-smoothing: antialiased;
 }
 
-/* 카드 공통 스타일 (깔끔한 화이트 & 둥근 모서리) */
-.card {
+/* 1. 모든 카드 스타일 (둥근 모서리 & 소프트 그림자) */
+.card,
+.boss-group {
   background-color: #FFFFFF !important;
   border: 1px solid #E2E8F0 !important;
-  border-radius: 16px !important;
+  border-radius: 18px !important;
   padding: 20px !important;
-  box-shadow: 0 1px 3px rgba(35, 41, 54, 0.04), 0 1px 2px rgba(35, 41, 54, 0.02) !important;
+  box-shadow: 0 1px 4px rgba(35, 41, 54, 0.04) !important;
   color: #1E293B !important;
 }
 
-/* 메인 오렌지 버튼 */
-.btn-primary {
+/* 2. 메인 오렌지 버튼 */
+.btn-primary,
+.save-btn {
   background: linear-gradient(135deg, #FF8438, #FF661A) !important;
   color: #FFFFFF !important;
   border: none !important;
   border-radius: 10px !important;
-  padding: 9px 18px !important;
+  padding: 8px 18px !important;
   font-weight: 700 !important;
   font-size: 13.5px !important;
   box-shadow: 0 3px 10px rgba(255, 110, 30, 0.28) !important;
   cursor: pointer !important;
   transition: all 0.15s ease !important;
 }
-.btn-primary:hover {
+.btn-primary:hover,
+.save-btn:hover {
   background: linear-gradient(135deg, #F97425, #EE580B) !important;
   transform: translateY(-1px) !important;
   box-shadow: 0 5px 14px rgba(255, 110, 30, 0.38) !important;
 }
 
-/* 보조 버튼 */
+/* 3. 보조 버튼 */
 .btn-secondary {
   background-color: #FFFFFF !important;
   border: 1px solid #E2E8F0 !important;
@@ -71,13 +88,33 @@ body {
   background-color: #F8FAFC !important;
 }
 
-/* 텍스트 뮤트 컬러 */
-.text-muted {
-  color: #64748B !important;
+/* 4. 시간표 슬롯 셀 스타일 (.slot-cell) */
+.slot-cell {
+  background-color: #FFFFFF !important;
+  border: 1px solid #E2E8F0 !important;
+  border-radius: 6px !important;
+  transition: all 0.1s ease !important;
+}
+.slot-cell:hover {
+  background-color: #FFF7ED !important;
+  border-color: #FED7AA !important;
+}
+.slot-cell.on {
+  background-color: #FF7B29 !important;
+  border-color: #EA580C !important;
+  box-shadow: 0 1px 4px rgba(255, 123, 41, 0.35) !important;
 }
 
-/* 인풋 박스 */
-input, select {
+/* 5. 텍스트 및 서브 타이틀 보정 */
+.text-muted, .sub {
+  color: #64748B !important;
+}
+h1, h2, h3, h4, strong {
+  color: #0F172A !important;
+}
+
+/* 6. 입력 인풋 & 셀렉트 박스 */
+input, select, textarea {
   background-color: #FFFFFF !important;
   border: 1px solid #CBD5E1 !important;
   border-radius: 10px !important;
@@ -88,4 +125,12 @@ input, select {
 input:focus, select:focus {
   border-color: #FF7B29 !important;
   box-shadow: 0 0 0 3px rgba(255, 123, 41, 0.15) !important;
+}
+
+/* 7. 보스 파티 행 스타일 */
+.party-row,
+.row-sub {
+  background-color: #F8FAFC !important;
+  border: 1px solid #E2E8F0 !important;
+  border-radius: 12px !important;
 }
