@@ -2,410 +2,132 @@
 @tailwind components;
 @tailwind utilities;
 
-/* 원본 Claude Artifact("레이드 시간표")의 디자인 시스템을 그대로 포팅.
-   Maplestory 웹폰트는 아티팩트 전용 파일 버킷에만 있어 여기선 쓸 수 없으므로,
-   헤딩은 손글씨 느낌의 Google Fonts "Gaegu"로, 본문은 일반 시스템 산세리프로
-   대체한다. */
-@import url("https://fonts.googleapis.com/css2?family=Gaegu:wght@400;700&display=swap");
+@import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css');
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700;800&display=swap');
 
+/* 1. 다크모드 차단 및 밝은 테마 완전 고정 */
 :root {
-  --bg: #eef1fa;
-  --surface: #ffffff;
-  --surface2: #f4f6fc;
-  --border: #dfe3f0;
-  --text: #1b1e2e;
-  --muted: #6b7280;
-  --accent: #c9791a;
-  --accent-soft: rgba(201, 121, 26, 0.14);
-  --avail: #059669;
-  --avail-soft: rgba(5, 150, 105, 0.14);
-  --warn: #b45309;
-  --warn-soft: rgba(180, 83, 9, 0.12);
-  --block: #9ca3af;
-  --block-soft: rgba(156, 163, 175, 0.16);
-  --danger: #dc2626;
-  --danger-soft: rgba(220, 38, 38, 0.14);
-  --shadow: 0 1px 3px rgba(20, 20, 40, 0.08);
-  --badge-edge: rgba(0, 0, 0, 0.35);
-  color-scheme: light dark;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --bg: #10121c;
-    --surface: #171a27;
-    --surface2: #1f2333;
-    --border: #2a2f42;
-    --text: #eef0fa;
-    --muted: #8890ab;
-    --accent: #f0a83c;
-    --accent-soft: rgba(240, 168, 60, 0.16);
-    --avail: #34d399;
-    --avail-soft: rgba(52, 211, 153, 0.16);
-    --warn: #fbbf24;
-    --warn-soft: rgba(251, 191, 36, 0.12);
-    --block: #4b5262;
-    --block-soft: rgba(75, 82, 98, 0.3);
-    --danger: #f87171;
-    --danger-soft: rgba(248, 113, 113, 0.18);
-    --shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
-    --badge-edge: rgba(255, 255, 255, 0.28);
-  }
+  color-scheme: light only !important;
+  --bg: #F6F8FB !important;
+  --surface: #FFFFFF !important;
+  --surface2: #F8FAFC !important;
+  --border: #E2E8F0 !important;
+  --text: #1E293B !important;
+  --muted: #64748B !important;
+  --accent: #FF7B29 !important;
+  --accent-hover: #F26A14 !important;
+  --accent-soft: #FFF2E8 !important;
+  --avail: #10B981 !important;
+  --avail-soft: rgba(16, 185, 129, 0.14) !important;
+  --warn: #F59E0B !important;
+  --warn-soft: rgba(245, 158, 11, 0.14) !important;
+  --danger: #EF4444 !important;
+  --danger-soft: rgba(239, 68, 68, 0.14) !important;
 }
 
 * {
   box-sizing: border-box;
+  font-family: "Pretendard Variable", -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif !important;
+  -webkit-font-smoothing: antialiased;
 }
 
-body {
-  background: var(--bg);
-  color: var(--text);
-  font-family: "Pretendard", "Malgun Gothic", -apple-system, sans-serif;
+html, body {
+  background-color: #F6F8FB !important;
+  color: #1E293B !important;
+  min-height: 100vh;
 }
 
-h1,
-h2,
-h3 {
-  font-family: "Gaegu", "Maplestory", "Malgun Gothic", sans-serif;
-  font-weight: 700;
-}
-h1 {
-  font-size: 26px;
-}
-h2 {
-  font-size: 18px;
-}
-h3 {
-  font-size: 15px;
-}
-
-.eyebrow {
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--accent);
-}
-
-.sub {
-  color: var(--muted);
-  font-size: 13.5px;
-  line-height: 1.5;
-}
-
-.card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  box-shadow: var(--shadow);
-  padding: 18px 18px 20px;
-}
-
-.btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 10px;
-  padding: 10px 16px;
-  font-size: 14px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: filter 0.15s ease, opacity 0.15s ease;
-  border: none;
-}
-.btn:disabled {
-  cursor: not-allowed;
-  opacity: 0.5;
-}
-
-.btn-primary,
-.save-btn {
-  border: none;
-  background: var(--accent);
-  color: #fff;
-}
-.btn-primary:hover:not(:disabled),
-.save-btn:hover:not(:disabled) {
-  filter: brightness(1.05);
-}
-
-.btn-secondary {
-  border: 1.5px solid var(--border);
-  background: var(--surface2);
-  color: var(--text);
-}
-.btn-secondary:hover:not(:disabled) {
-  border-color: var(--accent);
-}
-
-.who-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  border: 1.5px solid var(--border);
-  background: var(--surface2);
-  color: var(--text);
-  padding: 8px 14px;
-  border-radius: 999px;
-  font-size: 13.5px;
-  font-weight: 700;
-  cursor: pointer;
-}
-.who-btn.active {
-  border-color: var(--accent);
-  background: var(--accent-soft);
-}
-
-.day-tab {
-  border: 1.5px solid var(--border);
-  background: var(--surface2);
-  color: var(--text);
-  padding: 7px 14px;
-  border-radius: 14px;
-  font-size: 13.5px;
-  font-weight: 700;
-  cursor: pointer;
-}
-.day-tab.active {
-  border-color: var(--accent);
-  background: var(--accent-soft);
-  color: var(--accent);
-}
-
-.hour-btn,
-.slot-cell {
-  min-width: 32px;
-  height: 32px;
-  width: 100%;
-  border: 1.5px solid var(--border);
-  background: var(--surface);
-  color: var(--muted);
-  border-radius: 8px;
-  font-size: 11px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: background 0.1s ease, border-color 0.1s ease, color 0.1s ease;
-}
-.hour-btn:hover,
-.slot-cell:hover {
-  border-color: var(--accent);
-}
-.hour-btn.on,
-.slot-cell.on {
-  background: var(--avail-soft);
-  border-color: var(--avail);
-  color: var(--avail);
-}
-
+/* 2. 카드: 어두운 박스 -> 화이트 카드 */
+.card,
 .boss-group {
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  margin-top: 12px;
-  overflow: hidden;
-  background: var(--surface);
+  background-color: #FFFFFF !important;
+  border: 1px solid #E2E8F0 !important;
+  border-radius: 16px !important;
+  padding: 20px 24px !important;
+  color: #1E293B !important;
+  box-shadow: 0 1px 3px rgba(35, 41, 54, 0.04), 0 1px 2px rgba(35, 41, 54, 0.02) !important;
+}
+.card:hover {
+  border-color: #CBD5E1 !important;
+  box-shadow: 0 4px 14px rgba(35, 41, 54, 0.06) !important;
 }
 
-.boss-group-head {
-  width: 100%;
-  border: none;
-  background: var(--surface2);
-  padding: 9px 14px;
-  font-weight: 700;
-  font-size: 15px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+/* 3. 메인 오렌지 버튼 */
+.btn-primary,
+button[type="submit"].btn-primary,
+.save-btn {
+  background: linear-gradient(135deg, #FF8438, #FF661A) !important;
+  color: #FFFFFF !important;
+  border: none !important;
+  border-radius: 9px !important;
+  padding: 8px 16px !important;
+  font-weight: 700 !important;
+  font-size: 13.5px !important;
+  box-shadow: 0 3px 10px rgba(255, 110, 30, 0.28) !important;
+  cursor: pointer !important;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+.btn-primary:hover,
+.save-btn:hover {
+  background: linear-gradient(135deg, #F97425, #EE580B) !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 5px 14px rgba(255, 110, 30, 0.38) !important;
 }
 
-.boss-group-chevron {
-  display: inline-block;
-  color: var(--muted);
-  font-size: 11px;
-  transition: transform 0.15s ease;
-  flex: none;
+/* 4. 보조 버튼 */
+.btn-secondary,
+.btn-outline {
+  background: #FFFFFF !important;
+  border: 1px solid #E2E8F0 !important;
+  color: #64748B !important;
+  border-radius: 9px !important;
+  padding: 8px 16px !important;
+  font-weight: 600 !important;
+  font-size: 13.5px !important;
+  cursor: pointer !important;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
 }
-.boss-group-chevron.open {
-  transform: rotate(90deg);
-}
-
-.boss-group-body[hidden] {
-  display: none;
-}
-
-.party-row {
-  padding: 12px 14px;
-  border-top: 1px solid var(--border);
-}
-.party-row:first-child {
-  border-top: none;
-}
-.party-row--mine {
-  background: var(--accent-soft);
+.btn-secondary:hover,
+.btn-outline:hover {
+  border-color: #CBD5E1 !important;
+  color: #1E293B !important;
+  background-color: #F8FAFC !important;
 }
 
-.chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  background: var(--surface2);
-  border: 1px solid var(--border);
-  padding: 3px 9px 3px 6px;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 700;
+/* 5. 시간표 슬롯 셀 스타일 */
+.slot-cell {
+  background-color: #FFFFFF !important;
+  border: 1px solid #E2E8F0 !important;
+  border-radius: 6px !important;
 }
-.chip.me {
-  border-color: var(--accent);
-  background: var(--accent-soft);
+.slot-cell:hover {
+  background-color: #FFF7ED !important;
+  border-color: #FED7AA !important;
 }
-.chip.chip--fixed {
-  border-color: var(--avail);
-  background: var(--avail-soft);
-  color: var(--avail);
+.slot-cell.on {
+  background-color: #FF7B29 !important;
+  border-color: #EA580C !important;
+  box-shadow: 0 1px 4px rgba(255, 123, 41, 0.3) !important;
 }
 
-.dot {
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  border-radius: 999px;
-  flex: none;
+/* 6. 입력 필드 */
+input, select, textarea {
+  background: #FFFFFF !important;
+  border: 1px solid #CBD5E1 !important;
+  border-radius: 9px !important;
+  color: #1E293B !important;
+  padding: 9px 13px !important;
+  outline: none !important;
+}
+input:focus, select:focus, textarea:focus {
+  border-color: #FF7B29 !important;
+  box-shadow: 0 0 0 3px rgba(255, 123, 41, 0.15) !important;
 }
 
-.status-text {
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--muted);
+/* 7. 텍스트 */
+.text-muted, .sub {
+  color: #64748B !important;
 }
-.status-text.fixed,
-.status-text.ready {
-  color: var(--avail);
-}
-.status-text.done {
-  color: var(--warn);
-}
-
-.confirm-select {
-  border: 1.5px solid var(--border);
-  background: var(--surface);
-  color: var(--text);
-  padding: 7px 10px;
-  border-radius: 8px;
-  font-size: 12.5px;
-  font-weight: 700;
-}
-
-.clear-btn {
-  border: 1.5px solid var(--warn);
-  background: var(--warn-soft);
-  color: var(--warn);
-  padding: 6px 11px;
-  border-radius: 8px;
-  font-size: 12px;
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.diff-badge {
-  display: inline-block;
-  vertical-align: 2px;
-  margin-left: 2px;
-  padding: 2px 7px;
-  border-radius: 4px;
-  border: 1px solid var(--badge-edge);
-  font-size: 10.5px;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-}
-.diff-easy {
-  background-color: #8b9099;
-  color: #fff;
-}
-.diff-normal {
-  background-color: #2563eb;
-  color: #fff;
-}
-.diff-hard {
-  background-color: #c81e1e;
-  color: #fff;
-}
-.diff-chaos {
-  background-color: #1a1a1a;
-  color: #f2c14e;
-}
-.diff-extreme {
-  background-color: #1a1a1a;
-  color: #ff3b3b;
-}
-
-.period-badge {
-  display: inline-block;
-  padding: 2px 8px;
-  border-radius: 999px;
-  font-size: 10px;
-  font-weight: 700;
-  background: var(--surface2);
-  color: var(--muted);
-  border: 1px solid var(--border);
-}
-
-.party-meso {
-  width: 100%;
-  font-size: 11.5px;
-  color: var(--accent);
-  font-weight: 700;
-  margin-top: 4px;
-}
-
-.meso-summary {
-  color: var(--accent);
-  font-size: 13px;
-  font-weight: 700;
-}
-
-/* ---- 설정 화면 폼류에 쓰이는 보조 유틸 클래스 ---- */
-.input {
-  border: 1.5px solid var(--border);
-  background: var(--surface);
-  color: var(--text);
-  border-radius: 10px;
-  padding: 9px 12px;
-  font-size: 13.5px;
-}
-.input:focus {
-  outline: none;
-  border-color: var(--accent);
-}
-
-.label {
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--muted);
-}
-
-.text-muted {
-  color: var(--muted);
-}
-
-.pill {
-  cursor: pointer;
-  border-radius: 999px;
-  padding: 6px 13px;
-  font-size: 12.5px;
-  font-weight: 700;
-  background: var(--surface2);
-  color: var(--muted);
-  border: 1.5px solid var(--border);
-}
-.pill.active {
-  background: var(--accent-soft);
-  border-color: var(--accent);
-  color: var(--accent);
-}
-
-.row-sub {
-  background: var(--surface2);
-  border-radius: 10px;
+h1, h2, h3, h4, strong {
+  color: #1E293B !important;
 }
