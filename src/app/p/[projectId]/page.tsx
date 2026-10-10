@@ -2,7 +2,7 @@ import { requireProjectMember } from "@/lib/project";
 import ScheduleBoard from "@/components/ScheduleBoard";
 
 export default async function ProjectDashboardPage({ params }: { params: { projectId: string } }) {
-  const { supabase, user, project } = await requireProjectMember(params.projectId);
+  const { supabase, user, project, role } = await requireProjectMember(params.projectId);
   const projectId = params.projectId;
 
   const [
@@ -90,6 +90,8 @@ export default async function ProjectDashboardPage({ params }: { params: { proje
       projectId={projectId}
       maxPerHour={project.max_per_hour}
       currentUserId={user.id}
+      // [추가] 그룹장은 자기 그룹의 모든 파티 일정을 확정·완료·해제할 수 있다
+      isOwner={role === "owner"}
       members={memberList}
       bosses={bosses ?? []}
       parties={partyList}

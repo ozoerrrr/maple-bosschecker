@@ -14,6 +14,7 @@ interface Props {
   party: RawParty;
   weekMode: "this" | "next";
   currentUserId: string;
+  isOwner: boolean; // [추가] 그룹장이면 모든 파티 일정을 수정할 수 있다
   snapshot: ScheduleSnapshot;
   memberName: (uid: string) => string;
   onChanged: () => void;
@@ -32,7 +33,7 @@ function monthlyDateLabel(dateStr: string, hour: number) {
 // 원본 partyStatusHtml()을 포팅: 확정 전이면 후보 시간 드롭다운 + 확정 버튼,
 // 확정됐으면 그 시간 표시 + 완료/취소 버튼. 월간보스는 요일 라벨 대신 실제
 // 달력 날짜(candidateMonthlyDates)로 확정한다.
-export default function PartyCard({ projectId, boss, party, weekMode, currentUserId, snapshot, memberName, onChanged }: Props) {
+export default function PartyCard({ projectId, boss, party, weekMode, currentUserId, isOwner, snapshot, memberName, onChanged }: Props) {
   const supabase = createClient();
   const [isPending, startTransition] = useTransition();
   const [picked, setPicked] = useState<string>("");
@@ -67,6 +68,9 @@ export default function PartyCard({ projectId, boss, party, weekMode, currentUse
   }, [snapshot, partyObj, isMonthly]);
 
   const isInParty = party.members.some((m) => m.userId === currentUserId);
+  // [추가] 확정·완료·해제 권한: 이 파티의 파티원 또는 그룹장만 가능
+  // (DB에서도 0009 마이그레이션의 RLS로 같은 규칙을 강제한다)
+  const canEdit = isInParty || isOwner;
 
   const confirmedMonthlySlot =
     isMonthly && confirmation && !confirmation.cleared && confirmation.confirmed_date && confirmation.hour != null
@@ -87,7 +91,7 @@ export default function PartyCard({ projectId, boss, party, weekMode, currentUse
   const meso = mesoPerPerson(boss.name, boss.difficulty, party.members.length || 1);
 
   function confirmSlot() {
-    if (!picked) return;
+    if (!canEdit || !picked) return; // [추가] 권한이 없으면 확정 불가
     startTransition(async () => {
       if (isMonthly) {
         const [date, hourStr] = picked.split("|");
@@ -120,6 +124,7 @@ export default function PartyCard({ projectId, boss, party, weekMode, currentUse
   }
 
   function toggleCleared(next: boolean) {
+    if (!canEdit) return; // [추가] 권한이 없으면 완료 처리 불가
     startTransition(async () => {
       await supabase.from("party_confirmations").update({ cleared: next }).eq("party_id", party.id);
       onChanged();
@@ -127,6 +132,7 @@ export default function PartyCard({ projectId, boss, party, weekMode, currentUse
   }
 
   function unconfirm() {
+    if (!canEdit) return; // [추가] 권한이 없으면 확정 해제 불가
     startTransition(async () => {
       if (weekMode === "this") {
         await supabase.from("party_confirmations").delete().eq("party_id", party.id);
@@ -154,9 +160,12 @@ export default function PartyCard({ projectId, boss, party, weekMode, currentUse
         {weekMode === "this" && cleared ? (
           <div className="flex items-center gap-2">
             <span className="status-text done">완료</span>
-            <button disabled={isPending} onClick={() => toggleCleared(false)} className="text-xs text-[color:var(--muted)] underline">
-              취소
-            </button>
+            {/* [추가] 파티원·그룹장만 완료 취소 가능 */}
+            {canEdit && (
+              <button disabled={isPending} onClick={() => toggleCleared(false)} className="text-xs text-[color:var(--muted)] underline">
+                취소
+              </button>
+            )}
           </div>
         ) : hasAnyConfirmed ? (
           <div className="flex items-center gap-2">
@@ -168,20 +177,26 @@ export default function PartyCard({ projectId, boss, party, weekMode, currentUse
                 : ""}{" "}
               확정
             </span>
-            {weekMode === "this" && (
+            {/* [추가] 파티원·그룹장만 완료 처리/확정 취소 가능 */}
+            {canEdit && weekMode === "this" && (
               <button disabled={isPending} onClick={() => toggleCleared(true)} className="status-text ready underline">
                 완료
               </button>
             )}
-            <button disabled={isPending} onClick={unconfirm} className="clear-btn">
-              취소
-            </button>
+            {canEdit && (
+              <button disabled={isPending} onClick={unconfirm} className="clear-btn">
+                취소
+              </button>
+            )}
           </div>
         ) : isMonthly ? (
           monthlyCandidates.length === 0 ? (
             <span className="status-text" style={{ color: "var(--danger)" }}>
               겹치는 날짜 없음
             </span>
+          ) : !canEdit ? (
+            // [추가] 권한이 없으면 드롭다운 대신 안내 배지만 표시
+            <span className="status-text">후보 {monthlyCandidates.length}개 · 파티원 확정 대기</span>
           ) : (
             <div className="flex items-center gap-2">
               <select value={picked} onChange={(e) => setPicked(e.target.value)} className="confirm-select">
@@ -201,6 +216,9 @@ export default function PartyCard({ projectId, boss, party, weekMode, currentUse
           <span className="status-text" style={{ color: "var(--danger)" }}>
             겹치는 시간 없음
           </span>
+        ) : !canEdit ? (
+          // [추가] 권한이 없으면 드롭다운 대신 안내 배지만 표시
+          <span className="status-text">후보 {candidates.length}개 · 파티원 확정 대기</span>
         ) : (
           <div className="flex items-center gap-2">
             <select value={picked} onChange={(e) => setPicked(e.target.value)} className="confirm-select">

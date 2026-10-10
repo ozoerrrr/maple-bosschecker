@@ -27,6 +27,7 @@ interface Props {
   projectId: string;
   maxPerHour: number;
   currentUserId: string;
+  isOwner: boolean; // [추가] 그룹장 여부 (파티 일정 수정 권한 판단용)
   members: Member[];
   bosses: RawBoss[];
   parties: RawParty[];
@@ -266,6 +267,7 @@ export default function ScheduleBoard(props: Props) {
         projectId={props.projectId}
         maxPerHour={props.maxPerHour}
         currentUserId={props.currentUserId}
+        isOwner={props.isOwner} // [추가] 권한 판단용으로 PartyCard까지 전달
         weekMode={weekMode}
         bosses={props.bosses}
         parties={props.parties}

@@ -10,6 +10,7 @@ interface Props {
   projectId: string;
   maxPerHour: number;
   currentUserId: string;
+  isOwner: boolean; // [추가] PartyCard로 넘겨 권한 판단에 사용
   weekMode: "this" | "next";
   bosses: RawBoss[];
   parties: RawParty[];
@@ -95,6 +96,7 @@ export default function BossList(props: Props) {
                       party={p}
                       weekMode={effectiveMode}
                       currentUserId={props.currentUserId}
+                      isOwner={props.isOwner} // [추가]
                       snapshot={props.snapshot}
                       memberName={props.memberName}
                       onChanged={props.onChanged}
