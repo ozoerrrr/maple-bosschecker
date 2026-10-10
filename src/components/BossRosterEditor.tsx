@@ -3,8 +3,11 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { DIFFICULTIES, DIFFICULTY_LABEL, parseTrailingDifficulty } from "@/lib/scheduling/meso";
+import { BOSS_CATALOG, DIFFICULTIES, DIFFICULTY_LABEL, difficultiesOf, parseTrailingDifficulty } from "@/lib/scheduling/meso";
 import type { Difficulty } from "@/lib/scheduling/types";
+
+// [추가] 보스 드롭다운에서 "직접 입력…"을 뜻하는 값
+const CUSTOM_BOSS = "__custom__";
 
 interface Boss {
   id: string;
@@ -78,6 +81,8 @@ export default function BossRosterEditor({ projectId, bosses, parties, members, 
   const [isPending, startTransition] = useTransition();
 
   const [newBossName, setNewBossName] = useState("");
+  // [추가] 보스 드롭다운 선택값: "" = 미선택, 보스 이름, 또는 CUSTOM_BOSS
+  const [newBossChoice, setNewBossChoice] = useState("");
   const [newBossPeriod, setNewBossPeriod] = useState<"weekly" | "monthly">("weekly");
   const [newBossDifficulty, setNewBossDifficulty] = useState<Difficulty | "">("");
   const [addingPartyFor, setAddingPartyFor] = useState<string | null>(null);
@@ -88,6 +93,25 @@ export default function BossRosterEditor({ projectId, bosses, parties, members, 
   function refresh() {
     router.refresh();
   }
+
+  // [추가] 드롭다운에서 보스를 고르면 이름·주기·난이도를 함께 맞춘다
+  function chooseBoss(value: string) {
+    setNewBossChoice(value);
+    if (value === CUSTOM_BOSS || value === "") {
+      setNewBossName("");
+      setNewBossDifficulty("");
+      return;
+    }
+    setNewBossName(value);
+    const entry = BOSS_CATALOG.find((b) => b.name === value);
+    if (entry) setNewBossPeriod(entry.period);
+    const diffs = difficultiesOf(value);
+    setNewBossDifficulty(diffs.length === 1 ? diffs[0] : ""); // 난이도가 하나뿐이면 자동 선택
+  }
+
+  // [추가] 난이도 드롭다운에 보일 목록: 목록의 보스면 그 보스 난이도만, 직접 입력이면 전체
+  const difficultyOptions =
+    newBossChoice && newBossChoice !== CUSTOM_BOSS ? difficultiesOf(newBossChoice) : DIFFICULTIES;
 
   function addBoss(e: React.FormEvent) {
     e.preventDefault();
@@ -109,6 +133,7 @@ export default function BossRosterEditor({ projectId, bosses, parties, members, 
       });
       setNewBossName("");
       setNewBossDifficulty("");
+      setNewBossChoice(""); // [추가] 드롭다운도 처음 상태로
       refresh();
     });
   }
@@ -216,12 +241,25 @@ export default function BossRosterEditor({ projectId, bosses, parties, members, 
       <form onSubmit={addBoss} className="card flex flex-wrap items-end gap-2">
         <div className="flex flex-1 flex-col gap-1">
           <label className="label">새 보스 이름</label>
-          <input
-            value={newBossName}
-            onChange={(e) => setNewBossName(e.target.value)}
-            placeholder="예: 세렌 (난이도는 오른쪽에서 따로 선택)"
-            className="input"
-          />
+          {/* [추가] 보스는 목록에서 고르고, 목록에 없으면 "직접 입력…"으로 입력칸을 연다 */}
+          <select value={newBossChoice} onChange={(e) => chooseBoss(e.target.value)} className="input">
+            <option value="">보스 선택</option>
+            {BOSS_CATALOG.map((b) => (
+              <option key={b.name} value={b.name}>
+                {b.name}
+              </option>
+            ))}
+            <option value={CUSTOM_BOSS}>직접 입력…</option>
+          </select>
+          {newBossChoice === CUSTOM_BOSS && (
+            <input
+              value={newBossName}
+              onChange={(e) => setNewBossName(e.target.value)}
+              placeholder="보스 이름 (예: 세렌 — 난이도는 오른쪽에서 따로 선택)"
+              className="input"
+              autoFocus
+            />
+          )}
         </div>
         <div className="flex flex-col gap-1">
           <label className="label">주기</label>
@@ -242,7 +280,8 @@ export default function BossRosterEditor({ projectId, bosses, parties, members, 
             className="input"
           >
             <option value="">없음</option>
-            {DIFFICULTIES.map((d) => (
+            {/* [변경] 고른 보스에 실제로 있는 난이도만 보여준다 */}
+            {difficultyOptions.map((d) => (
               <option key={d} value={d}>
                 {DIFFICULTY_LABEL[d]}
               </option>
@@ -256,7 +295,7 @@ export default function BossRosterEditor({ projectId, bosses, parties, members, 
 
       {bosses.length === 0 && (
         <p className="card text-muted">
-          아직 보스가 없어요. 위에서 그룹이 도는 보스를 하나씩 추가해주세요 (보스 이름만 적고, 난이도는 옆 드롭다운에서 골라주세요).
+          아직 보스가 없어요. 위에서 그룹이 도는 보스를 하나씩 추가해주세요 (보스와 난이도를 드롭다운에서 골라주세요).
         </p>
       )}
 

@@ -7,11 +7,19 @@ export const MESO_TABLE: Record<string, Partial<Record<Difficulty, number>>> = {
   "카링": { extreme: 53.87, hard: 15.6, normal: 5.93, easy: 3.2 },
   "칼로스": { extreme: 41.04, chaos: 12.3, normal: 4.79, easy: 2.38 },
   "대적자": { extreme: 47.12, hard: 13.9, normal: 5.32, easy: 2.61 },
-  "세렌": { extreme: 18.4, hard: 3.02 },
+  "세렌": { extreme: 18.4, hard: 3.02, normal: 1.67 }, // [추가] 노말 (레이드 시간표 기준)
   "벨로나": { hard: 29.5, normal: 8.24, easy: 3.96 },
   "흉성": { hard: 26.78, normal: 5.76 },
   "림보": { hard: 23.85, normal: 9.95 },
-  "스우": { extreme: 5.45 },
+  "스우": { extreme: 5.45, hard: 0.489 }, // [추가] 하드 (레이드 시간표 기준)
+  // [추가] 솔로 보스용 결정석 가격 (레이드 시간표 MESO_TABLE에서 그대로 옮김)
+  "데미안": { hard: 0.464 },
+  "루시드": { hard: 0.597 },
+  "더스크": { chaos: 0.663 },
+  "가디언 엔젤 슬라임": { chaos: 0.713 },
+  "진 힐라": { hard: 1.0 },
+  "윌": { hard: 0.732 },
+  "듄켈": { hard: 0.896 },
 };
 
 export const DIFFICULTY_LABEL: Record<Difficulty, string> = {
@@ -23,6 +31,36 @@ export const DIFFICULTY_LABEL: Record<Difficulty, string> = {
 };
 
 export const DIFFICULTIES: Difficulty[] = ["easy", "normal", "hard", "chaos", "extreme"];
+
+// [추가] 보스 추가 폼의 드롭다운 목록. 배열 순서가 곧 화면에 보이는 순서다
+// (레이드 시간표의 SOLO_BOSS_ORDER 15개 + 월간 검은마법사).
+// period는 보스를 고르면 주기 드롭다운에 자동으로 채우는 값이다.
+// 이름은 MESO_TABLE 키와 똑같이 맞춰서, 고른 보스는 항상 메소 계산이 된다.
+export const BOSS_CATALOG: { name: string; period: "weekly" | "monthly" }[] = [
+  { name: "스우", period: "weekly" },
+  { name: "데미안", period: "weekly" },
+  { name: "가디언 엔젤 슬라임", period: "weekly" },
+  { name: "루시드", period: "weekly" },
+  { name: "윌", period: "weekly" },
+  { name: "더스크", period: "weekly" },
+  { name: "진 힐라", period: "weekly" },
+  { name: "듄켈", period: "weekly" },
+  { name: "세렌", period: "weekly" },
+  { name: "칼로스", period: "weekly" },
+  { name: "대적자", period: "weekly" },
+  { name: "카링", period: "weekly" },
+  { name: "흉성", period: "weekly" },
+  { name: "벨로나", period: "weekly" },
+  { name: "림보", period: "weekly" },
+  { name: "검은마법사", period: "monthly" },
+];
+
+// [추가] 그 보스에 실제로 있는 난이도만 돌려준다 (MESO_TABLE 기준, 이지→익스트림 순서).
+// 표에 없는 보스(직접 입력)면 전체 난이도를 돌려준다.
+export function difficultiesOf(name: string): Difficulty[] {
+  const row = MESO_TABLE[name];
+  return row ? DIFFICULTIES.filter((d) => row[d] != null) : DIFFICULTIES;
+}
 
 // 넥슨 오픈API가 내려주는 한글 난이도 문자열 -> Difficulty 코드.
 // "노멀" 표기 변형까지 함께 받아둔다.
@@ -91,7 +129,10 @@ export function mesoPerPerson(
   return total / memberCount;
 }
 
-/** 원본 formatMeso: 소수점 1자리로 반올림 + "억" 접미사. */
+// [변경] 레이드 시간표의 formatMeso와 같게: 1억 미만은 만 단위("4,640만"),
+// 1억 이상은 소수 둘째 자리까지(끝자리 0 제거, "1.51억")
 export function formatMeso(v: number): string {
-  return (Math.round(v * 10) / 10).toFixed(1) + "억";
+  if (v === 0) return "0";
+  if (v < 1) return Math.round(v * 10000).toLocaleString("en-US") + "만";
+  return String(Math.round(v * 100) / 100) + "억";
 }
