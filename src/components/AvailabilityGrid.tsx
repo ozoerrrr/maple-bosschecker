@@ -146,7 +146,8 @@ export default function AvailabilityGrid({ projectId, userId, weekMode, initialS
         <tbody>
           {HOURS.map((h) => (
             <tr key={h}>
-              <td className="text-[10px]" style={{ color: "var(--muted)" }}>
+              {/* [변경] 시간 숫자를 칸 높이에 맞춰 세로 가운데 정렬 */}
+              <td className="text-[10px] align-middle" style={{ color: "var(--muted)" }}>
                 {h}
               </td>
               {DAYS.map((d) => {

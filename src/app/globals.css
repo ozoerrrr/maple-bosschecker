@@ -96,9 +96,16 @@ button[type="submit"].btn-primary,
 
 /* 5. 시간표 슬롯 셀 스타일 */
 .slot-cell {
+  /* [추가] 시간 칸 크기: 내용이 없는 버튼이라 크기를 직접 줘야 점으로 줄어들지 않는다.
+     가로는 요일 칸을 꽉 채우고, 세로는 손가락으로 누르기 쉬운 높이로 */
+  display: block;
+  width: 100%;
+  min-width: 28px;
+  height: 28px;
   background-color: #FFFFFF !important;
   border: 1px solid #E2E8F0 !important;
   border-radius: 6px !important;
+  cursor: pointer;
 }
 .slot-cell:hover {
   background-color: #FFF7ED !important;
