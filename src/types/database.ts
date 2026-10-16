@@ -163,7 +163,14 @@ export type Database = {
       };
     };
     Views: Record<string, never>;
-    Functions: Record<string, never>;
+    // [변경] supabase.rpc()로 부르는 DB 함수의 인자·반환 타입
+    Functions: {
+      debug_whoami: { Args: Record<string, never>; Returns: unknown };
+      // [추가] 0010 주간 리셋 (이번주 처음 호출 때만 true)
+      apply_weekly_reset: { Args: { p_project_id: string }; Returns: boolean };
+      // [추가] 0010 월간보스 우선: 밀어낸 주간 확정 수
+      push_out_weekly_for_monthly: { Args: { p_party_id: string }; Returns: number };
+    };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;
   };

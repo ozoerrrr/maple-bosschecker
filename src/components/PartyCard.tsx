@@ -106,6 +106,8 @@ export default function PartyCard({ projectId, boss, party, weekMode, currentUse
           cleared: false,
           confirmed_by: currentUserId,
         });
+        // [추가] 월간보스 우선: 이번주 날짜면 같은 요일·시각에 한도를 넘는 주간 확정을 DB 함수(0010)가 밀어낸다
+        await supabase.rpc("push_out_weekly_for_monthly", { p_party_id: party.id });
       } else {
         const [day, hourStr] = picked.split("|");
         const hour = parseInt(hourStr, 10);

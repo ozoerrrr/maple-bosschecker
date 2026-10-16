@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import {
@@ -13,7 +13,9 @@ import {
   type RawParty,
 } from "@/lib/scheduling/snapshot";
 import { formatMeso, mesoPerPerson } from "@/lib/scheduling/meso";
+import { reconcileConfirmed, reconcileNextConfirmed } from "@/lib/scheduling/parties";
 import AvailabilityGrid from "@/components/AvailabilityGrid";
+import MonthlyBlockCalendar from "@/components/MonthlyBlockCalendar";
 import BossList from "@/components/BossList";
 import ImportBossesFromNexon from "@/components/ImportBossesFromNexon";
 
@@ -93,6 +95,26 @@ export default function ScheduleBoard(props: Props) {
       }),
     [props]
   );
+
+  // [추가] 확정 재검증: 가능 시간·안 되는 날짜가 바뀌어 파티원 모두가 가능한 시간이 아니게 된
+  // 확정을 자동으로 푼다. 내가 수정할 수 있는 파티(파티원 또는 그룹장)만 처리한다(0009와 같은 기준).
+  // 한 번 시도한 파티는 다시 시도하지 않아, 삭제가 실패해도 무한 반복하지 않는다.
+  const reconcileTriedRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    const canEdit = (pid: string) =>
+      props.isOwner || !!snapshot.parties.find((p) => p.id === pid)?.members.includes(props.currentUserId);
+    const fresh = (ids: string[]) => ids.filter((id) => canEdit(id) && !reconcileTriedRef.current.has(id));
+    const stale = fresh(reconcileConfirmed(snapshot));
+    const staleNext = fresh(reconcileNextConfirmed(snapshot));
+    if (!stale.length && !staleNext.length) return;
+    [...stale, ...staleNext].forEach((id) => reconcileTriedRef.current.add(id));
+    (async () => {
+      if (stale.length) await supabase.from("party_confirmations").delete().in("party_id", stale);
+      if (staleNext.length) await supabase.from("next_party_confirmations").delete().in("party_id", staleNext);
+      router.refresh();
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [snapshot]);
 
   const memberName = useMemo(() => {
     const m = new Map(props.members.map((x) => [x.id, x.name]));
@@ -313,6 +335,17 @@ export default function ScheduleBoard(props: Props) {
                 ).filter((r) => r.user_id === props.currentUserId)}
                 onSaved={refresh}
               />
+              {/* [추가] 안 되는 날짜(월간 불가 날짜) 입력 달력: 날짜 기준이라 "이번주" 탭에서만 보여준다 */}
+              {weekMode === "this" && (
+                <MonthlyBlockCalendar
+                  projectId={props.projectId}
+                  userId={props.currentUserId}
+                  initialDates={props.monthlyBlock
+                    .filter((r) => r.user_id === props.currentUserId)
+                    .map((r) => r.blocked_date)}
+                  onSaved={refresh}
+                />
+              )}
             </div>
 
             {/* 모달 닫기 푸터 */}

@@ -4,7 +4,17 @@
 // 쪽(서버 컴포넌트 / route handler)이 Supabase에서 읽어온 스냅샷을 넘긴다.
 import { DAYS, HOURS, type Day } from "./constants";
 import { isAvailable, isAvailableIgnoringBlock, isAvailableNext } from "./availability";
-import { daysInMonth, isDayPastThisWeek, nextMonthOf, parseDateKey, weekdayLabelForDate, ymdKey } from "./dates";
+import {
+  daysInMonth,
+  isDayPastThisWeek,
+  nextMonthOf,
+  nextWeekStartStr,
+  parseDateKey,
+  thisWeekStartStr,
+  todayDateStr,
+  weekdayLabelForDate,
+  ymdKey,
+} from "./dates";
 import { isMonthlyBlockedRaw } from "./dates-block";
 import type {
   AvailabilityMap,
@@ -44,6 +54,11 @@ export function lockCount(
     if (p.id === excludePartyId) continue;
     const c = snap.confirmed[p.id];
     if (!c || c.cleared) continue;
+    // [변경] 월간 확정은 그 날짜가 이번주(목~수)일 때만 그 요일·시각의 한도를 차지한다.
+    // (전에는 매주 같은 요일의 주간 한도를 1칸씩 계속 차지하는 버그가 있었다)
+    if (periodOf(snap, p) === "monthly") {
+      if (!c.confirmed_date || c.confirmed_date < thisWeekStartStr() || c.confirmed_date >= nextWeekStartStr()) continue;
+    }
     if (!p.members.includes(uid)) continue;
     if (c.day !== day || c.hour !== hour) continue;
     n++;
@@ -88,6 +103,7 @@ export function reconcileConfirmed(snap: ScheduleSnapshot): string[] {
     if (slot.cleared) continue;
     if (periodOf(snap, p) === "monthly") {
       if (!slot.confirmed_date || slot.hour == null) continue;
+      if (slot.confirmed_date < todayDateStr()) continue; // [추가] 이미 지난 날짜의 확정은 건드리지 않는다
       const pd = parseDateKey(slot.confirmed_date);
       const weekday = weekdayLabelForDate(pd.year, pd.month0, pd.day);
       const stillFree = p.members.every(
@@ -99,6 +115,7 @@ export function reconcileConfirmed(snap: ScheduleSnapshot): string[] {
       continue;
     }
     if (slot.day == null || slot.hour == null) continue;
+    if (isDayPastThisWeek(slot.day as Day)) continue; // [추가] 이미 지난 요일의 확정은 건드리지 않는다
     const everyoneFree = p.members.every((uid) => isAvailable(snap.avail, snap.monthlyBlock, uid, slot.day as Day, slot.hour as number));
     const stillOk = everyoneFree && capOk(snap, p, slot.day as Day, slot.hour as number);
     if (!stillOk) toClear.push(p.id);

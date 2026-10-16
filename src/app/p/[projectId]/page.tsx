@@ -5,6 +5,11 @@ export default async function ProjectDashboardPage({ params }: { params: { proje
   const { supabase, user, project, role } = await requireProjectMember(params.projectId);
   const projectId = params.projectId;
 
+  // [추가] 주간 리셋: 이번주(한국시간 목요일 시작)에 처음 열릴 때 한 번만
+  // 지난주 확정을 지우고 다음주 입력을 이번주로 옮긴다. 판단·처리는 DB 함수(0010)가 하고,
+  // 이미 처리된 주면 아무것도 하지 않는다. 실패해도(함수 미설치 등) 화면은 그대로 보여준다.
+  await supabase.rpc("apply_weekly_reset", { p_project_id: projectId });
+
   const [
     { data: members },
     { data: bosses },
