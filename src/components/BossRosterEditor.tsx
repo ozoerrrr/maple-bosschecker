@@ -239,7 +239,8 @@ export default function BossRosterEditor({ projectId, bosses, parties, members, 
   return (
     <div className="flex flex-col gap-4">
       <form onSubmit={addBoss} className="card flex flex-wrap items-end gap-2">
-        <div className="flex flex-1 flex-col gap-1">
+        {/* [변경] 보스 드롭다운이 가로를 다 차지해 꺽쇠가 멀어 보이지 않게 폭 제한 */}
+        <div className="flex flex-1 flex-col gap-1 max-w-xs">
           <label className="label">새 보스 이름</label>
           {/* [추가] 보스는 목록에서 고르고, 목록에 없으면 "직접 입력…"으로 입력칸을 연다 */}
           <select value={newBossChoice} onChange={(e) => chooseBoss(e.target.value)} className="input">
@@ -288,7 +289,8 @@ export default function BossRosterEditor({ projectId, bosses, parties, members, 
             ))}
           </select>
         </div>
-        <button type="submit" disabled={isPending || !newBossName.trim()} className="btn-primary">
+        {/* [변경] 보스 추가 버튼을 폼 오른쪽 끝으로 붙인다 (ml-auto: 남는 왼쪽 여백을 모두 차지) */}
+        <button type="submit" disabled={isPending || !newBossName.trim()} className="btn-primary ml-auto">
           보스 추가
         </button>
       </form>
