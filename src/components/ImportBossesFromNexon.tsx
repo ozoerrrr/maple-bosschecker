@@ -130,6 +130,7 @@ export default function ImportBossesFromNexon({
         okNames.map((n) => ({ project_id: projectId, user_id: currentUserId, character_name: n })),
         { onConflict: "project_id,user_id,character_name", ignoreDuplicates: true }
       );
+      router.refresh(); // [추가] 저장한 부캐가 메소 카드에 바로 나오게 새로고침
     }
 
     const allBosses: FetchedBoss[] = results.flatMap((r) =>

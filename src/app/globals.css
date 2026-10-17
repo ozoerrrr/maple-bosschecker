@@ -38,8 +38,7 @@ html, body {
 }
 
 /* 2. 카드: 어두운 박스 -> 화이트 카드 */
-.card,
-.boss-group {
+.card {
   background-color: #FFFFFF !important;
   border: 1px solid #E2E8F0 !important;
   border-radius: 16px !important;
@@ -51,6 +50,53 @@ html, body {
   border-color: #CBD5E1 !important;
   box-shadow: 0 4px 14px rgba(35, 41, 54, 0.06) !important;
 }
+
+/* [추가] 보스 목록 카드 안의 보스별 카드 (레이드 시간표 .boss-group 모양) */
+.boss-group {
+  border: 1px solid #E2E8F0;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #FFFFFF;
+}
+.boss-group-head {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-align: left;
+  padding: 10px 14px;
+  background: #F4F6FC;
+  font-weight: 700;
+  font-size: 15px;
+  cursor: pointer;
+}
+.boss-group-head:hover { background: #EDF0F8; }
+.boss-group-title { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; }
+.boss-group-note { font-size: 11px; font-weight: 400; color: #6B7280; }
+.boss-group-summary { flex: none; font-size: 12px; font-weight: 700; color: #6B7280; font-variant-numeric: tabular-nums; }
+.boss-group-chevron { flex: none; font-size: 12px; color: #6B7280; transition: transform .15s ease; }
+.boss-group.open .boss-group-chevron { transform: rotate(90deg); }
+.boss-group-body[hidden] { display: none; }
+.boss-group-meso { font-size: 12px; font-weight: 700; color: #C9791A; }
+
+/* [추가] 펼친 보스 카드 안의 파티 줄: [파티 이름] | 참여자 칩 ...... [확정 칩] (클리어) */
+.party-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px 14px; border-top: 1px solid #E2E8F0; }
+.party-row:first-child { border-top: none; }
+.party-name { flex: none; font-weight: 700; font-size: 13px; padding-right: 12px; border-right: 1px solid #E2E8F0; }
+.party-members { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.chip.me { border-color: #FF7B29; background: #FFF7ED; }
+.chip-sub { font-weight: 400; color: #64748B; }
+.chip-x { border: none; background: none; color: inherit; cursor: pointer; font-weight: 700; padding: 0 0 0 2px; font-size: 13px; line-height: 1; }
+.chip-x:hover { color: #DC2626; }
+.party-status { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-left: auto; }
+.chip--fixed { border-color: #059669; background: rgba(5, 150, 105, 0.1); color: #047857; }
+.status-text { font-size: 12px; font-weight: 700; color: #6B7280; white-space: nowrap; }
+.confirm-select { border: 1.5px solid #E2E8F0; background: #FFFFFF; border-radius: 8px; padding: 5px 30px 5px 10px; font-size: 12.5px; font-weight: 700; max-width: 200px; }
+/* [추가] 클리어 타원 버튼 (레이드 시간표 클리어 버튼 색). done = 클리어한 상태 */
+.clear-btn { border: 1.5px solid #B45309; background: rgba(180, 83, 9, 0.1); color: #B45309; border-radius: 999px; padding: 4px 14px; font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+.clear-btn:hover:not(:disabled) { filter: brightness(1.05); }
+.clear-btn.done { background: #B45309; color: #FFFFFF; }
+.clear-btn:disabled { cursor: default; }
 
 /* 3. 메인 오렌지 버튼 */
 .btn-primary,

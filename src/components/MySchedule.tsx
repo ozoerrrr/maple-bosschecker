@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { DAY_INDEX, type Day } from "@/lib/scheduling/constants";
 import DifficultyBadge from "@/components/DifficultyBadge";
+import { OPEN_PARTY_EVENT } from "@/components/BossList"; // [추가]
 import { parseDateKey, weekdayLabelForDate } from "@/lib/scheduling/dates";
 import type { RawBoss, RawConfirmationRow, RawNextConfirmationRow, RawParty } from "@/lib/scheduling/snapshot";
 
@@ -107,11 +108,15 @@ export default function MySchedule({ currentUserId: me, bosses, parties, confirm
 
   // 항목을 누르면 보스 목록의 그 파티로 스크롤하고 잠깐 강조한다 (PartyCard의 id="party-<id>")
   function goToParty(partyId: string) {
-    const el = document.getElementById(`party-${partyId}`);
-    if (!el) return;
-    el.scrollIntoView({ behavior: "smooth", block: "center" });
-    el.classList.add("ring-2", "ring-orange-400", "rounded-lg");
-    setTimeout(() => el.classList.remove("ring-2", "ring-orange-400", "rounded-lg"), 1600);
+    // [추가] 보스 카드가 기본으로 닫혀 있으므로 먼저 그 보스를 펼치게 하고, 다시 그려진 뒤 스크롤한다
+    window.dispatchEvent(new CustomEvent(OPEN_PARTY_EVENT, { detail: partyId }));
+    setTimeout(() => {
+      const el = document.getElementById(`party-${partyId}`);
+      if (!el) return;
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      el.classList.add("ring-2", "ring-orange-400", "rounded-lg");
+      setTimeout(() => el.classList.remove("ring-2", "ring-orange-400", "rounded-lg"), 1600);
+    }, 60);
   }
 
   const kindStyle: Record<Kind, string> = {

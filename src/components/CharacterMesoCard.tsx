@@ -31,6 +31,7 @@ interface Props {
   soloPlans: SoloPlanRow[];
   soloClears: SoloClearRow[];
   extraChars: ExtraCharRow[];
+  candidates: { userId: string; characterName: string }[]; // [추가] 넥슨 후보로 등록한 캐릭터 (부캐 표시용)
   onChanged: () => void;
 }
 
@@ -56,7 +57,7 @@ export default function CharacterMesoCard(props: Props) {
 
   // 캐릭터별 계산 결과 (수익 높은 순 = 강한 캐릭터 순, 같으면 가나다순)
   const rows = useMemo(() => {
-    const chars = myCharacters(uid, props.parties, props.extraChars);
+    const chars = myCharacters(uid, props.parties, props.extraChars, props.candidates);
     return chars
       .map((ch) => {
         const plan = planRowsFor(props.soloPlans, uid, ch, weekMode);
@@ -64,7 +65,7 @@ export default function CharacterMesoCard(props: Props) {
         return { ch, plan, cw, total: cw.partyMeso + cw.soloMeso + cw.monthlyPartyMeso + cw.soloMonthly };
       })
       .sort((a, b) => b.total - a.total || a.ch.localeCompare(b.ch, "ko"));
-  }, [uid, props.parties, props.extraChars, props.soloPlans, weekMode, bossById]);
+  }, [uid, props.parties, props.extraChars, props.candidates, props.soloPlans, weekMode, bossById]);
 
   const clearKeys = useMemo(
     () =>

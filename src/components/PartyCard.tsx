@@ -6,12 +6,12 @@ import { candidateMonthlyDates, candidateSlots, candidateSlotsNext, type Schedul
 import type { RawBoss, RawParty } from "@/lib/scheduling/snapshot";
 import type { Day } from "@/lib/scheduling/constants";
 import { parseDateKey, weekdayLabelForDate } from "@/lib/scheduling/dates";
-import { formatMeso, mesoPerPerson } from "@/lib/scheduling/meso";
 
 interface Props {
   projectId: string;
   boss: RawBoss;
   party: RawParty;
+  partyIndex: number; // [추가] 보스 안에서 몇 번째 파티인지 (이름 없는 파티를 "N파티"로 표시)
   weekMode: "this" | "next";
   currentUserId: string;
   isOwner: boolean; // [추가] 그룹장이면 모든 파티 일정을 수정할 수 있다
@@ -33,7 +33,7 @@ function monthlyDateLabel(dateStr: string, hour: number) {
 // 원본 partyStatusHtml()을 포팅: 확정 전이면 후보 시간 드롭다운 + 확정 버튼,
 // 확정됐으면 그 시간 표시 + 완료/취소 버튼. 월간보스는 요일 라벨 대신 실제
 // 달력 날짜(candidateMonthlyDates)로 확정한다.
-export default function PartyCard({ projectId, boss, party, weekMode, currentUserId, isOwner, snapshot, memberName, onChanged }: Props) {
+export default function PartyCard({ projectId, boss, party, partyIndex, weekMode, currentUserId, isOwner, snapshot, memberName, onChanged }: Props) {
   const supabase = createClient();
   const [isPending, startTransition] = useTransition();
   const [picked, setPicked] = useState<string>("");
@@ -87,8 +87,6 @@ export default function PartyCard({ projectId, boss, party, weekMode, currentUse
         ? { day: nextConfirmation.day, hour: nextConfirmation.hour }
         : null
       : null;
-
-  const meso = mesoPerPerson(boss.name, boss.difficulty, party.members.length || 1);
 
   function confirmSlot() {
     if (!canEdit || !picked) return; // [추가] 권한이 없으면 확정 불가
@@ -170,108 +168,140 @@ export default function PartyCard({ projectId, boss, party, weekMode, currentUse
 
   const hasAnyConfirmed = isMonthly ? !!confirmedMonthlySlot : !!confirmedSlot;
 
+  // [추가] 클리어한 파티도 확정했던 시간이 있으면 시간 칩으로 보여준다 (즉석 클리어는 시간 없음)
+  const clearedTimeLabel =
+    weekMode === "this" && cleared && confirmation && confirmation.hour != null
+      ? isMonthly && confirmation.confirmed_date
+        ? monthlyDateLabel(confirmation.confirmed_date, confirmation.hour)
+        : confirmation.day
+        ? slotLabel(confirmation.day, confirmation.hour)
+        : null
+      : null;
+
+  // [추가] 확정 칩 글자
+  const confirmedLabel =
+    isMonthly && confirmedMonthlySlot
+      ? monthlyDateLabel(confirmedMonthlySlot.date, confirmedMonthlySlot.hour)
+      : confirmedSlot
+      ? slotLabel(confirmedSlot.day, confirmedSlot.hour)
+      : "";
+
+  // [변경] 파티 줄 레이아웃: [파티 이름] | 참여자 칩들 ...... [확정 칩] (클리어)
   return (
     <div id={`party-${party.id}`} className={"party-row" + (isInParty ? " party-row--mine" : "")}>
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex flex-wrap items-center gap-1">
-          <span className="font-medium">{party.label || "파티"}</span>
-          <span className="text-xs text-[color:var(--muted)]">
-            {party.members
-              .map((m) => (m.characterName ? `${memberName(m.userId)} (${m.characterName})` : memberName(m.userId)))
-              .join(", ") || "멤버 없음"}
-          </span>
-        </div>
+      {/* [추가] 파티 이름: 이름이 없으면 순번으로 "1파티, 2파티…" */}
+      <span className="party-name">{party.label || `${partyIndex + 1}파티`}</span>
 
-        {weekMode === "this" && cleared ? (
-          <div className="flex items-center gap-2">
-            <span className="status-text done">완료</span>
-            {/* [추가] 파티원·그룹장만 완료 취소 가능 */}
-            {canEdit && (
-              <button disabled={isPending} onClick={() => toggleCleared(false)} className="text-xs text-[color:var(--muted)] underline">
-                취소
-              </button>
-            )}
-          </div>
-        ) : hasAnyConfirmed ? (
-          <div className="flex items-center gap-2">
-            <span className="chip chip--fixed">
-              {isMonthly && confirmedMonthlySlot
-                ? monthlyDateLabel(confirmedMonthlySlot.date, confirmedMonthlySlot.hour)
-                : confirmedSlot
-                ? slotLabel(confirmedSlot.day, confirmedSlot.hour)
-                : ""}{" "}
-              확정
-            </span>
-            {/* [추가] 파티원·그룹장만 완료 처리/확정 취소 가능 */}
-            {canEdit && weekMode === "this" && (
-              <button disabled={isPending} onClick={() => toggleCleared(true)} className="status-text ready underline">
-                완료
-              </button>
-            )}
-            {canEdit && (
-              <button disabled={isPending} onClick={unconfirm} className="clear-btn">
-                취소
-              </button>
-            )}
-          </div>
+      {/* [변경] 참여자를 "이름 · 캐릭" 칩으로, 내 칩은 주황으로 강조 */}
+      <div className="party-members">
+        {party.members.length === 0 ? (
+          <span className="text-xs text-[color:var(--muted)]">멤버 없음</span>
         ) : (
-          // [추가] 확정 전 상태: 시간 선택(또는 안내)과 "바로 클리어" 버튼을 나란히 둔다
-          <div className="flex flex-wrap items-center gap-2">
-          {isMonthly ? (
-          monthlyCandidates.length === 0 ? (
-            <span className="status-text" style={{ color: "var(--danger)" }}>
-              겹치는 날짜 없음
+          party.members.map((m, i) => (
+            <span key={`${m.userId}-${i}`} className={"chip" + (m.userId === currentUserId ? " me" : "")}>
+              {memberName(m.userId)}
+              {m.characterName && <span className="chip-sub">· {m.characterName}</span>}
             </span>
-          ) : !canEdit ? (
-            // [추가] 권한이 없으면 드롭다운 대신 안내 배지만 표시
-            <span className="status-text">후보 {monthlyCandidates.length}개 · 파티원 확정 대기</span>
-          ) : (
-            <div className="flex items-center gap-2">
-              <select value={picked} onChange={(e) => setPicked(e.target.value)} className="confirm-select">
-                <option value="">날짜 선택</option>
-                {monthlyCandidates.map((s) => (
-                  <option key={`${s.date}-${s.hour}`} value={`${s.date}|${s.hour}`}>
-                    {monthlyDateLabel(s.date, s.hour)}
-                  </option>
-                ))}
-              </select>
-              <button disabled={isPending || !picked} onClick={confirmSlot} className="save-btn !px-3 !py-1 text-xs">
-                확정
-              </button>
-            </div>
-          )
-        ) : candidates.length === 0 ? (
-          <span className="status-text" style={{ color: "var(--danger)" }}>
-            겹치는 시간 없음
-          </span>
-        ) : !canEdit ? (
-          // [추가] 권한이 없으면 드롭다운 대신 안내 배지만 표시
-          <span className="status-text">후보 {candidates.length}개 · 파티원 확정 대기</span>
-        ) : (
-          <div className="flex items-center gap-2">
-            <select value={picked} onChange={(e) => setPicked(e.target.value)} className="confirm-select">
-              <option value="">시간 선택</option>
-              {candidates.map((s) => (
-                <option key={`${s.day}-${s.hour}`} value={`${s.day}|${s.hour}`}>
-                  {slotLabel(s.day, s.hour)}
-                </option>
-              ))}
-            </select>
-            <button disabled={isPending || !picked} onClick={confirmSlot} className="save-btn !px-3 !py-1 text-xs">
-              확정
-            </button>
-          </div>
-        )}
-          {/* [추가] 즉석 클리어 버튼: 파티원·그룹장만, 이번주(월간은 항상 이번주 기준)만 */}
-          {canEdit && weekMode === "this" && (
-            <button disabled={isPending} onClick={instantClear} className="text-xs text-[color:var(--muted)] underline">
-              바로 클리어
-            </button>
-          )}
-          </div>
+          ))
         )}
       </div>
-      {meso != null && <div className="party-meso">1인당 {formatMeso(meso)}</div>}
+
+      <div className="party-status">
+        {weekMode === "this" && cleared ? (
+          <>
+            {clearedTimeLabel && <span className="chip chip--fixed">{clearedTimeLabel}</span>}
+            {/* [변경] "완료" -> 클리어 타원 버튼. 클리어 상태에서 다시 누르면 클리어 취소 (파티원·그룹장만) */}
+            <button
+              type="button"
+              disabled={isPending || !canEdit}
+              onClick={() => toggleCleared(false)}
+              className="clear-btn done"
+              title={canEdit ? "다시 누르면 클리어 취소" : undefined}
+            >
+              클리어 ✓
+            </button>
+          </>
+        ) : hasAnyConfirmed ? (
+          <>
+            {/* [변경] 확정 칩 안의 ×로 확정 해제 (기존 "취소" 버튼 대체) */}
+            <span className="chip chip--fixed">
+              {confirmedLabel} 확정
+              {canEdit && (
+                <button
+                  type="button"
+                  disabled={isPending}
+                  onClick={unconfirm}
+                  className="chip-x"
+                  aria-label="확정 취소"
+                  title="확정 취소"
+                >
+                  ×
+                </button>
+              )}
+            </span>
+            {canEdit && weekMode === "this" && (
+              <button type="button" disabled={isPending} onClick={() => toggleCleared(true)} className="clear-btn">
+                클리어
+              </button>
+            )}
+          </>
+        ) : (
+          // 확정 전 상태: 시간 선택(또는 안내) + 즉석 클리어 버튼
+          <>
+            {isMonthly ? (
+              monthlyCandidates.length === 0 ? (
+                <span className="status-text" style={{ color: "var(--danger)" }}>
+                  겹치는 날짜 없음
+                </span>
+              ) : !canEdit ? (
+                // [추가] 권한이 없으면 드롭다운 대신 안내만 표시
+                <span className="status-text">후보 {monthlyCandidates.length}개 · 파티원 확정 대기</span>
+              ) : (
+                <>
+                  <select value={picked} onChange={(e) => setPicked(e.target.value)} className="confirm-select">
+                    <option value="">날짜 선택</option>
+                    {monthlyCandidates.map((s) => (
+                      <option key={`${s.date}-${s.hour}`} value={`${s.date}|${s.hour}`}>
+                        {monthlyDateLabel(s.date, s.hour)}
+                      </option>
+                    ))}
+                  </select>
+                  <button disabled={isPending || !picked} onClick={confirmSlot} className="save-btn !px-3 !py-1 text-xs">
+                    확정
+                  </button>
+                </>
+              )
+            ) : candidates.length === 0 ? (
+              <span className="status-text" style={{ color: "var(--danger)" }}>
+                겹치는 시간 없음
+              </span>
+            ) : !canEdit ? (
+              // [추가] 권한이 없으면 드롭다운 대신 안내만 표시
+              <span className="status-text">후보 {candidates.length}개 · 파티원 확정 대기</span>
+            ) : (
+              <>
+                <select value={picked} onChange={(e) => setPicked(e.target.value)} className="confirm-select">
+                  <option value="">시간 선택</option>
+                  {candidates.map((s) => (
+                    <option key={`${s.day}-${s.hour}`} value={`${s.day}|${s.hour}`}>
+                      {slotLabel(s.day, s.hour)}
+                    </option>
+                  ))}
+                </select>
+                <button disabled={isPending || !picked} onClick={confirmSlot} className="save-btn !px-3 !py-1 text-xs">
+                  확정
+                </button>
+              </>
+            )}
+            {/* [변경] 즉석 클리어도 같은 클리어 버튼으로: 파티원·그룹장만, 이번주(월간은 항상 이번주 기준)만 */}
+            {canEdit && weekMode === "this" && (
+              <button type="button" disabled={isPending} onClick={instantClear} className="clear-btn" title="시간 확정 없이 바로 클리어">
+                클리어
+              </button>
+            )}
+          </>
+        )}
+      </div>
     </div>
   );
 }

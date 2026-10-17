@@ -57,6 +57,12 @@ export const BOSS_CATALOG: { name: string; period: "weekly" | "monthly" }[] = [
   { name: "검은 마법사", period: "monthly" }, // [변경] 띄어쓰기
 ];
 
+// [추가] 보스 목록(시간 확정) 표시 순서 -- 레이드 시간표의 BOSSES 표 순서.
+// 여기 없는 보스는 그룹 관리의 sort_order 순서대로 맨 뒤에 붙는다.
+export const PARTY_BOSS_ORDER = [
+  "검은 마법사", "스우", "세렌", "칼로스", "대적자", "카링", "흉성", "벨로나", "림보", "발드릭스",
+];
+
 // [추가] 그 보스에 실제로 있는 난이도만 돌려준다 (MESO_TABLE 기준, 이지→익스트림 순서).
 // 표에 없는 보스(직접 입력)면 전체 난이도를 돌려준다.
 export function difficultiesOf(name: string): Difficulty[] {

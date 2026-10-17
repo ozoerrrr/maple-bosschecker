@@ -335,6 +335,7 @@ export default function ScheduleBoard(props: Props) {
         soloPlans={props.soloPlans}
         soloClears={props.soloClears}
         extraChars={props.extraChars}
+        candidates={props.candidates} // [추가]
         onChanged={refresh}
       />
 

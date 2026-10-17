@@ -206,8 +206,15 @@ export function charWeek(
 }
 
 /** 내 캐릭터 목록: 내가 파티원으로 들어간 캐릭터 + 직접 추가한 캐릭터. */
-export function myCharacters(uid: string, parties: RawParty[], extras: ExtraCharRow[]): string[] {
+// [변경] 넥슨에서 불러온 후보 캐릭터(candidates)도 내 캐릭터로 센다 (메소 카드 부캐 누락 버그 수정)
+export function myCharacters(
+  uid: string,
+  parties: RawParty[],
+  extras: ExtraCharRow[],
+  candidates: { userId: string; characterName: string }[] = []
+): string[] {
   const set = new Set<string>();
+  for (const c of candidates) if (c.userId === uid && c.characterName) set.add(c.characterName);
   for (const p of parties) for (const m of p.members) if (m.userId === uid && m.characterName) set.add(m.characterName);
   for (const e of extras) if (e.user_id === uid) set.add(e.character_name);
   return [...set];
