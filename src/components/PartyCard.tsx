@@ -128,7 +128,30 @@ export default function PartyCard({ projectId, boss, party, weekMode, currentUse
   function toggleCleared(next: boolean) {
     if (!canEdit) return; // [추가] 권한이 없으면 완료 처리 불가
     startTransition(async () => {
-      await supabase.from("party_confirmations").update({ cleared: next }).eq("party_id", party.id);
+      // [추가] 시간 없이 "바로 클리어"한 파티의 완료를 취소하면 확정 전 상태로 되돌린다(행 삭제)
+      const isInstant = !next && confirmation && confirmation.day == null && confirmation.confirmed_date == null;
+      if (isInstant) {
+        await supabase.from("party_confirmations").delete().eq("party_id", party.id);
+      } else {
+        await supabase.from("party_confirmations").update({ cleared: next }).eq("party_id", party.id);
+      }
+      onChanged();
+    });
+  }
+
+  // [추가] 즉석 클리어: 시간을 확정하지 않고 바로 완료로 저장한다 (레이드 시간표의 "클리어" 바로 누르기).
+  // 시간 칸(day/hour/confirmed_date)은 비워 두고 cleared만 true로 둔다.
+  function instantClear() {
+    if (!canEdit) return;
+    startTransition(async () => {
+      await supabase.from("party_confirmations").upsert({
+        party_id: party.id,
+        day: null,
+        hour: null,
+        confirmed_date: null,
+        cleared: true,
+        confirmed_by: currentUserId,
+      });
       onChanged();
     });
   }
@@ -191,7 +214,10 @@ export default function PartyCard({ projectId, boss, party, weekMode, currentUse
               </button>
             )}
           </div>
-        ) : isMonthly ? (
+        ) : (
+          // [추가] 확정 전 상태: 시간 선택(또는 안내)과 "바로 클리어" 버튼을 나란히 둔다
+          <div className="flex flex-wrap items-center gap-2">
+          {isMonthly ? (
           monthlyCandidates.length === 0 ? (
             <span className="status-text" style={{ color: "var(--danger)" }}>
               겹치는 날짜 없음
@@ -234,6 +260,14 @@ export default function PartyCard({ projectId, boss, party, weekMode, currentUse
             <button disabled={isPending || !picked} onClick={confirmSlot} className="save-btn !px-3 !py-1 text-xs">
               확정
             </button>
+          </div>
+        )}
+          {/* [추가] 즉석 클리어 버튼: 파티원·그룹장만, 이번주(월간은 항상 이번주 기준)만 */}
+          {canEdit && weekMode === "this" && (
+            <button disabled={isPending} onClick={instantClear} className="text-xs text-[color:var(--muted)] underline">
+              바로 클리어
+            </button>
+          )}
           </div>
         )}
       </div>

@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import type { RawBoss, RawParty } from "@/lib/scheduling/snapshot";
 import type { ScheduleSnapshot } from "@/lib/scheduling/parties";
-import { DIFFICULTY_LABEL } from "@/lib/scheduling/meso";
+import DifficultyBadge from "@/components/DifficultyBadge";
 import PartyCard from "@/components/PartyCard";
 
 interface Props {
@@ -26,6 +26,8 @@ export default function BossList(props: Props) {
   // 기본은 전부 펼친 상태 -- "접은" 보스 id만 집합으로 기억한다. 서버
   // 상태가 아니라 화면 보기 편의일 뿐이라 로컬 state로 충분하다.
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  // [추가] "내 파티만" 보기: 내가 파티원인 파티만 보이고, 그런 파티가 없는 보스는 숨긴다 (화면 보기 설정)
+  const [onlyMine, setOnlyMine] = useState(false);
 
   function toggleCollapsed(bossId: string) {
     setCollapsed((prev) => {
@@ -55,15 +57,40 @@ export default function BossList(props: Props) {
   if (sortedBosses.length === 0) {
     return (
       <div className="card sub">
-        아직 등록된 보스가 없어요. 그룹 설정에서 보스와 파티를 먼저 추가해주세요.
+        아직 등록된 보스가 없어요. 그룹 관리에서 보스와 파티를 먼저 추가해주세요.
       </div>
     );
   }
 
   return (
     <div className="flex flex-col gap-4">
+      {/* [추가] 전체 / 내 파티만 토글 */}
+      <div className="inline-flex self-start rounded-xl border border-slate-200/60 bg-slate-100 p-1">
+        {(
+          [
+            [false, "전체"],
+            [true, "내 파티만"],
+          ] as [boolean, string][]
+        ).map(([v, label]) => (
+          <button
+            key={label}
+            type="button"
+            onClick={() => setOnlyMine(v)}
+            className={
+              "rounded-lg px-3 py-1 text-xs font-bold transition " +
+              (onlyMine === v ? "bg-white text-orange-600 shadow-sm" : "text-slate-500 hover:text-slate-800")
+            }
+          >
+            {label}
+          </button>
+        ))}
+      </div>
       {sortedBosses.map((boss) => {
-        const parties = partiesByBoss.get(boss.id) ?? [];
+        const allParties = partiesByBoss.get(boss.id) ?? [];
+        const parties = onlyMine
+          ? allParties.filter((p) => p.members.some((m) => m.userId === props.currentUserId))
+          : allParties;
+        if (onlyMine && parties.length === 0) return null; // [추가] 내 파티가 없는 보스는 숨김
         const effectiveMode: "this" | "next" = boss.period === "monthly" ? "this" : props.weekMode;
         const isOpen = !collapsed.has(boss.id);
         return (
@@ -79,7 +106,7 @@ export default function BossList(props: Props) {
                   ▶
                 </span>
                 {boss.name}
-                {boss.difficulty && <span className={`diff-badge diff-${boss.difficulty}`}>{DIFFICULTY_LABEL[boss.difficulty]}</span>}
+                <DifficultyBadge difficulty={boss.difficulty} className="ml-1.5" /> {/* [변경] 난이도는 배지로 */}
               </span>
               <span className="period-badge">{boss.period === "monthly" ? "월간" : "주간"}</span>
             </button>

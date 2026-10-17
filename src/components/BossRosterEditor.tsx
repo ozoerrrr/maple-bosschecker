@@ -3,8 +3,10 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { BOSS_CATALOG, DIFFICULTIES, DIFFICULTY_LABEL, difficultiesOf, parseTrailingDifficulty } from "@/lib/scheduling/meso";
+import { BOSS_CATALOG, DIFFICULTIES, difficultiesOf, parseTrailingDifficulty } from "@/lib/scheduling/meso";
+import DifficultyBadge from "@/components/DifficultyBadge";
 import type { Difficulty } from "@/lib/scheduling/types";
+import { partyMaxOf } from "@/lib/scheduling/solo";
 
 // [추가] 보스 드롭다운에서 "직접 입력…"을 뜻하는 값
 const CUSTOM_BOSS = "__custom__";
@@ -51,6 +53,13 @@ interface Props {
   parties: Party[];
   members: Member[];
   candidates: Candidate[];
+  memberChars: MemberChar[]; // [추가] 그룹원별 캐릭터 목록 (파티 추가·수정 폼용)
+}
+
+/** [추가] 그룹원 한 명의 캐릭터 하나 (settings/page.tsx에서 여러 데이터를 합쳐 만든다). */
+interface MemberChar {
+  userId: string;
+  characterName: string;
 }
 
 /** 드래그 중인 후보 캐릭터를 dataTransfer로 나르는 페이로드. */
@@ -75,7 +84,7 @@ function readDragPayload(e: React.DragEvent): DragPayload | null {
 // 보스/파티를 직접 CRUD하는 설정 화면. 원본의 하드코딩된 BOSS_ORDER +
 // RAW_PARTIES + "예약된 변경사항" 메커니즘을 대신한다 -- 여기서 하는 모든
 // 조작은 바로 실제 DB 행이라, 재배포나 예약 개념 자체가 필요 없다.
-export default function BossRosterEditor({ projectId, bosses, parties, members, candidates }: Props) {
+export default function BossRosterEditor({ projectId, bosses, parties, members, candidates, memberChars }: Props) {
   const supabase = createClient();
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -188,6 +197,10 @@ export default function BossRosterEditor({ projectId, bosses, parties, members, 
   // 후보 캐릭터를 기존 파티로 드래그/선택: 아직 그 파티에 없으면
   // party_members에 추가하고, 후보 풀에서는 제거한다.
   function assignCandidateToParty(party: Party, payload: DragPayload) {
+    // [추가] 보스 최대 인원이 찬 파티에는 새 사람을 넣지 않는다 (파티 추가·수정 폼과 같은 상한)
+    const bossName = bosses.find((b) => b.id === party.boss_id)?.name ?? "";
+    const isNewPerson = !party.members.some((m) => m.userId === payload.userId);
+    if (isNewPerson && party.members.length >= partyMaxOf(bossName)) return;
     startTransition(async () => {
       const alreadyIn = party.members.some((m) => m.userId === payload.userId);
       if (!alreadyIn) {
@@ -275,19 +288,25 @@ export default function BossRosterEditor({ projectId, bosses, parties, members, 
         </div>
         <div className="flex flex-col gap-1">
           <label className="label">난이도 (메소 계산용, 선택)</label>
-          <select
-            value={newBossDifficulty}
-            onChange={(e) => setNewBossDifficulty(e.target.value as Difficulty | "")}
-            className="input"
-          >
-            <option value="">없음</option>
-            {/* [변경] 고른 보스에 실제로 있는 난이도만 보여준다 */}
+          {/* [변경] 난이도는 어디서든 배지로 보여야 해서 드롭다운 대신 배지 버튼으로 고른다.
+              고른 보스에 실제로 있는 난이도만 나오고, 고른 것을 다시 누르면 "없음"이 된다 */}
+          <div className="flex min-h-[42px] flex-wrap items-center gap-1.5">
             {difficultyOptions.map((d) => (
-              <option key={d} value={d}>
-                {DIFFICULTY_LABEL[d]}
-              </option>
+              <button
+                key={d}
+                type="button"
+                onClick={() => setNewBossDifficulty(newBossDifficulty === d ? "" : d)}
+                aria-pressed={newBossDifficulty === d}
+                className={
+                  "rounded-md p-0.5 transition " +
+                  (newBossDifficulty === d ? "ring-2 ring-orange-400" : "opacity-50 hover:opacity-100")
+                }
+              >
+                <DifficultyBadge difficulty={d} />
+              </button>
             ))}
-          </select>
+            {!newBossDifficulty && <span className="text-xs text-slate-400">없음</span>}
+          </div>
         </div>
         {/* [변경] 보스 추가 버튼을 폼 오른쪽 끝으로 붙인다 (ml-auto: 남는 왼쪽 여백을 모두 차지) */}
         <button type="submit" disabled={isPending || !newBossName.trim()} className="btn-primary ml-auto">
@@ -336,9 +355,7 @@ export default function BossRosterEditor({ projectId, bosses, parties, members, 
                       다시 고르게 하면 오히려 헷갈려서 읽기 전용 배지로 바꿨다. 난이도를
                       고치고 싶으면 보스 이름을 눌러 이름을 바꾸면서 "이름 뒤에 난이도"
                       형식(예: "세렌 하드")으로 적으면 자동으로 분리해 반영된다. */}
-                  {boss.difficulty && (
-                    <span className="period-badge">{DIFFICULTY_LABEL[boss.difficulty]}</span>
-                  )}
+                  <DifficultyBadge difficulty={boss.difficulty} /> {/* [변경] 난이도는 배지로 */}
                   <span className="period-badge">
                     {boss.period === "monthly" ? "월간" : "주간"}
                   </span>
@@ -466,8 +483,11 @@ export default function BossRosterEditor({ projectId, bosses, parties, members, 
               {addingPartyFor === boss.id ? (
                 <PartyEditorForm
                   projectId={projectId}
-                  bossId={boss.id}
+                  boss={boss}
                   members={members}
+                  memberChars={memberChars}
+                  candidates={bossCandidates}
+                  siblingParties={bossParties}
                   sortOrder={bossParties.length}
                   onDone={() => {
                     setAddingPartyFor(null);
@@ -484,12 +504,15 @@ export default function BossRosterEditor({ projectId, bosses, parties, members, 
           );
         })}
 
-      {editingParty && (
+      {editingParty && bosses.some((b) => b.id === editingParty.boss_id) && (
         <PartyEditorForm
           projectId={projectId}
-          bossId={editingParty.boss_id}
+          boss={bosses.find((b) => b.id === editingParty.boss_id)!}
           party={editingParty}
           members={members}
+          memberChars={memberChars}
+          candidates={candidates.filter((c) => c.bossId === editingParty.boss_id)}
+          siblingParties={parties.filter((p) => p.boss_id === editingParty.boss_id && p.id !== editingParty.id)}
           sortOrder={editingParty.sort_order}
           onDone={() => {
             setEditingParty(null);
@@ -502,38 +525,83 @@ export default function BossRosterEditor({ projectId, bosses, parties, members, 
   );
 }
 
+// [변경] 파티 추가·수정 폼: 그룹원마다 캐릭터 칩을 보여주고, 보스 최대 인원 안에서 캐릭터를 골라 파티를 만든다.
+// - 한 사람은 한 파티에 캐릭터 하나만 (같은 사람의 다른 캐릭터를 누르면 그쪽으로 바뀜, party_members PK와 같음)
+// - 인원이 최대(partyMaxOf)에 차면 아직 안 고른 사람의 칩은 고를 수 없다
+// - 이 보스의 후보 캐릭터는 "후보" 표시 + 앞쪽, 같은 보스의 다른 파티에 있는 캐릭터는 "다른 파티"로 막는다
+// - 목록에 없는 캐릭터는 사람별 "+ 직접 입력"으로 추가
+// - 저장하면 파티원이 캐릭터 이름과 함께 들어가고, 고른 캐릭터는 이 보스의 후보 목록에서 빠진다(드래그 배정과 같음)
 function PartyEditorForm({
   projectId,
-  bossId,
+  boss,
   party,
   members,
+  memberChars,
+  candidates,
+  siblingParties,
   sortOrder,
   onDone,
   onCancel,
 }: {
   projectId: string;
-  bossId: string;
+  boss: Boss;
   party?: Party;
   members: Member[];
+  memberChars: MemberChar[];
+  candidates: Candidate[]; // 이 보스의 후보 캐릭터
+  siblingParties: Party[]; // 같은 보스의 다른 파티 (수정 중인 파티 자신은 제외)
   sortOrder: number;
   onDone: () => void;
   onCancel: () => void;
 }) {
   const supabase = createClient();
+  const max = partyMaxOf(boss.name);
   const [label, setLabel] = useState(party?.label ?? "");
-  const [selected, setSelected] = useState<Set<string>>(new Set((party?.members ?? []).map((m) => m.userId)));
+  // 사람별로 고른 캐릭터: userId -> 캐릭터 이름 ("" = 예전에 캐릭터 없이 들어가 있던 멤버)
+  const [picked, setPicked] = useState<Map<string, string>>(
+    () => new Map((party?.members ?? []).map((m) => [m.userId, m.characterName ?? ""]))
+  );
+  const [typingFor, setTypingFor] = useState<string | null>(null); // 직접 입력 칸이 열린 사람
+  const [typedName, setTypedName] = useState("");
+  const [typedChars, setTypedChars] = useState<MemberChar[]>([]); // 직접 입력으로 추가한 칩
   const [isPending, startTransition] = useTransition();
 
-  // 기존에 드래그 앤 드롭으로 배정해둔 캐릭터명은, 이 수동 편집 폼으로 멤버
-  // 선택을 저장해도 그대로 유지한다 (다시 체크 해제했다가 체크하면 캐릭터명은
-  // 사라짐 -- 그 경우는 후보 풀에서 다시 드래그해서 채워야 한다).
-  const existingCharByUser = new Map((party?.members ?? []).map((m) => [m.userId, m.characterName]));
+  const candidateKeys = new Set(candidates.map((c) => `${c.userId}|${c.characterName}`));
+  const usedElsewhere = new Set(
+    siblingParties.flatMap((p) => p.members.filter((m) => m.characterName).map((m) => `${m.userId}|${m.characterName}`))
+  );
 
-  function toggleMember(id: string) {
-    const next = new Set(selected);
-    if (next.has(id)) next.delete(id);
-    else next.add(id);
-    setSelected(next);
+  /** 한 사람의 캐릭터 칩 목록: 이 보스의 후보 -> 나머지(가나다순), 지금 고른 캐릭터와 직접 입력한 캐릭터도 포함 */
+  function charsOf(uid: string): string[] {
+    const set = new Set<string>();
+    for (const c of memberChars) if (c.userId === uid) set.add(c.characterName);
+    for (const c of typedChars) if (c.userId === uid) set.add(c.characterName);
+    const cur = picked.get(uid);
+    if (cur) set.add(cur);
+    return [...set].sort((a, b) => {
+      const ca = candidateKeys.has(`${uid}|${a}`) ? 0 : 1;
+      const cb = candidateKeys.has(`${uid}|${b}`) ? 0 : 1;
+      return ca - cb || a.localeCompare(b, "ko");
+    });
+  }
+
+  function pick(uid: string, ch: string) {
+    const next = new Map(picked);
+    if (next.get(uid) === ch) next.delete(uid); // 다시 누르면 해제
+    else {
+      if (!next.has(uid) && next.size >= max) return; // 인원이 찼으면 새 사람은 못 넣는다
+      next.set(uid, ch);
+    }
+    setPicked(next);
+  }
+
+  function addTyped(uid: string) {
+    const name = typedName.trim();
+    setTypingFor(null);
+    setTypedName("");
+    if (!name) return;
+    setTypedChars((prev) => (prev.some((c) => c.userId === uid && c.characterName === name) ? prev : [...prev, { userId: uid, characterName: name }]));
+    if (picked.has(uid) || picked.size < max) setPicked(new Map(picked).set(uid, name));
   }
 
   function save() {
@@ -545,45 +613,118 @@ function PartyEditorForm({
       } else {
         const { data } = await supabase
           .from("parties")
-          .insert({ project_id: projectId, boss_id: bossId, label: label.trim() || null, sort_order: sortOrder })
+          .insert({ project_id: projectId, boss_id: boss.id, label: label.trim() || null, sort_order: sortOrder })
           .select("id")
           .single();
         partyId = data?.id;
       }
-      if (partyId && selected.size > 0) {
+      if (partyId && picked.size > 0) {
         await supabase.from("party_members").insert(
-          Array.from(selected).map((uid) => ({
-            party_id: partyId!,
-            user_id: uid,
-            character_name: existingCharByUser.get(uid) ?? null,
-          }))
+          [...picked.entries()].map(([uid, ch]) => ({ party_id: partyId!, user_id: uid, character_name: ch || null }))
         );
+        // 고른 캐릭터가 이 보스의 후보였다면 후보 목록에서 뺀다
+        const usedCandidateIds = candidates
+          .filter((c) => picked.get(c.userId) === c.characterName)
+          .map((c) => c.id);
+        if (usedCandidateIds.length) await supabase.from("boss_candidates").delete().in("id", usedCandidateIds);
       }
       onDone();
     });
   }
 
+  const full = picked.size >= max;
+
   return (
-    <div className="flex flex-col gap-2 rounded-lg p-3" style={{ border: "1.5px dashed var(--border)" }}>
-      <input
-        value={label}
-        onChange={(e) => setLabel(e.target.value)}
-        placeholder="파티 이름 (선택, 예: 1파티)"
-        className="input"
-      />
-      <div className="flex flex-wrap gap-2">
-        {members.map((m) => (
-          <label
-            key={m.id}
-            className={
-              "pill " + (selected.has(m.id) ? "active" : "")
-            }
-          >
-            <input type="checkbox" className="hidden" checked={selected.has(m.id)} onChange={() => toggleMember(m.id)} />
-            {m.name}
-          </label>
-        ))}
+    <div className="flex flex-col gap-3 rounded-lg p-3" style={{ border: "1.5px dashed var(--border)" }}>
+      <div className="flex flex-wrap items-center gap-2">
+        <input
+          value={label}
+          onChange={(e) => setLabel(e.target.value)}
+          placeholder="파티 이름 (선택, 예: 1파티)"
+          className="input min-w-[160px] flex-1"
+        />
+        <span className={"text-sm font-bold " + (full ? "text-orange-600" : "text-slate-500")}>
+          인원 {picked.size} / {max}
+        </span>
       </div>
+
+      <div className="flex flex-col gap-2">
+        {members.map((m) => {
+          const chars = charsOf(m.id);
+          const mine = picked.get(m.id);
+          const locked = full && !picked.has(m.id); // 인원이 차서 이 사람은 못 넣음
+          return (
+            <div key={m.id} className={"flex flex-wrap items-center gap-1.5 " + (locked ? "opacity-50" : "")}>
+              <span className="w-20 shrink-0 text-sm font-semibold text-slate-700">{m.name}</span>
+              {chars.length === 0 && <span className="text-xs text-slate-400">캐릭터 없음</span>}
+              {chars.map((ch) => {
+                const key = `${m.id}|${ch}`;
+                const sel = mine === ch;
+                const taken = usedElsewhere.has(key) && !sel;
+                const isCandidate = candidateKeys.has(key);
+                return (
+                  <button
+                    key={ch}
+                    type="button"
+                    disabled={isPending || taken || (locked && !sel)}
+                    onClick={() => pick(m.id, ch)}
+                    aria-pressed={sel}
+                    className={
+                      "inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-semibold transition disabled:cursor-not-allowed " +
+                      (sel
+                        ? "border-orange-400 bg-orange-50 text-orange-600"
+                        : taken
+                        ? "border-slate-200 bg-slate-50 text-slate-300"
+                        : "border-slate-200 bg-white text-slate-600 hover:border-orange-300")
+                    }
+                  >
+                    {sel && "✓ "}
+                    {ch}
+                    {isCandidate && !taken && <span className="text-[10px] text-sky-600">후보</span>}
+                    {taken && <span className="text-[10px]">· 다른 파티</span>}
+                  </button>
+                );
+              })}
+              {mine === "" && (
+                <span className="text-xs text-slate-400">(캐릭터 미지정으로 들어가 있음 — 캐릭터를 골라 주세요)</span>
+              )}
+              {typingFor === m.id ? (
+                <span className="inline-flex items-center gap-1">
+                  <input
+                    autoFocus
+                    value={typedName}
+                    maxLength={20}
+                    onChange={(e) => setTypedName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") addTyped(m.id);
+                      if (e.key === "Escape") setTypingFor(null);
+                    }}
+                    placeholder="캐릭터 이름"
+                    className="!w-32 !py-0.5 text-xs"
+                  />
+                  <button type="button" onClick={() => addTyped(m.id)} className="text-xs underline">
+                    추가
+                  </button>
+                </span>
+              ) : (
+                !locked && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTypingFor(m.id);
+                      setTypedName("");
+                    }}
+                    className="text-xs text-slate-500 underline"
+                  >
+                    + 직접 입력
+                  </button>
+                )
+              )}
+            </div>
+          );
+        })}
+      </div>
+
       <div className="flex gap-2">
         <button disabled={isPending} onClick={save} className="btn-primary !px-3 !py-1 text-xs">
           저장

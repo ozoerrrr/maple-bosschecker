@@ -131,6 +131,56 @@ input:focus, select:focus, textarea:focus {
   box-shadow: 0 0 0 3px rgba(255, 123, 41, 0.15) !important;
 }
 
+/* [추가] 디자인 개편 때 빠진 공통 스타일: 칩(이름표), 알약 선택 버튼, 작은 라벨 */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  border: 1px solid #E2E8F0;
+  background: #F8FAFC;
+  font-size: 12px;
+  font-weight: 600;
+  color: #334155;
+}
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  border: 1.5px solid #E2E8F0;
+  background: #FFFFFF;
+  font-size: 13px;
+  font-weight: 600;
+  color: #475569;
+  cursor: pointer;
+  user-select: none;
+}
+.pill:hover { border-color: #FED7AA; }
+.pill.active { border-color: #FF7B29; background: #FFF7ED; color: #EA580C; }
+.label { font-size: 12px; color: #64748B; }
+
+/* [추가] 난이도 배지 (레이드 시간표와 같은 색). 난이도는 어디서든 이 배지로만 표시한다 (DifficultyBadge.tsx) */
+.diff-badge {
+  display: inline-block;
+  vertical-align: 1px;
+  padding: 2px 7px;
+  border-radius: 4px;
+  border: 1px solid rgba(0, 0, 0, 0.35);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  line-height: 1.35;
+  white-space: nowrap;
+}
+.diff-easy { background-color: #8b9099; color: #fff; }
+.diff-normal { background-color: #2563eb; color: #fff; }
+.diff-hard { background-color: #c81e1e; color: #fff; }
+.diff-chaos { background-color: #1a1a1a; color: #f2c14e; }
+.diff-extreme { background-color: #1a1a1a; color: #ff3b3b; }
+
 /* [추가] 드롭다운(select) 화살표 위치 조정
    브라우저 기본 화살표는 위치를 바꿀 수 없어서 숨기고(appearance: none),
    같은 모양의 꺽쇠를 배경 이미지로 그려 오른쪽 여백을 직접 정한다. */

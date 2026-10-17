@@ -3,7 +3,7 @@
 import type { Difficulty } from "./types";
 
 export const MESO_TABLE: Record<string, Partial<Record<Difficulty, number>>> = {
-  "검은마법사": { extreme: 56.8, hard: 4.65 },
+  "검은 마법사": { extreme: 56.8, hard: 4.65 }, // [변경] 넥슨 표기와 같게 띄어쓰기
   "카링": { extreme: 53.87, hard: 15.6, normal: 5.93, easy: 3.2 },
   "칼로스": { extreme: 41.04, chaos: 12.3, normal: 4.79, easy: 2.38 },
   "대적자": { extreme: 47.12, hard: 13.9, normal: 5.32, easy: 2.61 },
@@ -11,6 +11,7 @@ export const MESO_TABLE: Record<string, Partial<Record<Difficulty, number>>> = {
   "벨로나": { hard: 29.5, normal: 8.24, easy: 3.96 },
   "흉성": { hard: 26.78, normal: 5.76 },
   "림보": { hard: 23.85, normal: 9.95 },
+  "발드릭스": { normal: 13.2 }, // [추가] 레이드 시간표 최신판 기준
   "스우": { extreme: 5.45, hard: 0.489 }, // [추가] 하드 (레이드 시간표 기준)
   // [추가] 솔로 보스용 결정석 가격 (레이드 시간표 MESO_TABLE에서 그대로 옮김)
   "데미안": { hard: 0.464 },
@@ -33,7 +34,7 @@ export const DIFFICULTY_LABEL: Record<Difficulty, string> = {
 export const DIFFICULTIES: Difficulty[] = ["easy", "normal", "hard", "chaos", "extreme"];
 
 // [추가] 보스 추가 폼의 드롭다운 목록. 배열 순서가 곧 화면에 보이는 순서다
-// (레이드 시간표의 SOLO_BOSS_ORDER 15개 + 월간 검은마법사).
+// (레이드 시간표의 SOLO_BOSS_ORDER 15개 + 발드릭스 + 월간 검은 마법사).
 // period는 보스를 고르면 주기 드롭다운에 자동으로 채우는 값이다.
 // 이름은 MESO_TABLE 키와 똑같이 맞춰서, 고른 보스는 항상 메소 계산이 된다.
 export const BOSS_CATALOG: { name: string; period: "weekly" | "monthly" }[] = [
@@ -52,7 +53,8 @@ export const BOSS_CATALOG: { name: string; period: "weekly" | "monthly" }[] = [
   { name: "흉성", period: "weekly" },
   { name: "벨로나", period: "weekly" },
   { name: "림보", period: "weekly" },
-  { name: "검은마법사", period: "monthly" },
+  { name: "발드릭스", period: "weekly" }, // [추가]
+  { name: "검은 마법사", period: "monthly" }, // [변경] 띄어쓰기
 ];
 
 // [추가] 그 보스에 실제로 있는 난이도만 돌려준다 (MESO_TABLE 기준, 이지→익스트림 순서).

@@ -15,6 +15,7 @@ export default async function ProjectSettingsPage({ params }: { params: { projec
     { data: partyMembers },
     { data: members },
     { data: bossCandidates },
+    { data: extraChars },
   ] = await Promise.all([
     supabase.from("bosses").select("*").eq("project_id", project.id).order("sort_order"),
     supabase.from("parties").select("*").eq("project_id", project.id).order("sort_order"),
@@ -26,14 +27,16 @@ export default async function ProjectSettingsPage({ params }: { params: { projec
     // 빈 결과를 내던 문제 (아래에서 profiles를 따로 불러와 JS로 합침).
     supabase.from("project_members").select("user_id, role").eq("project_id", project.id),
     supabase.from("boss_candidates").select("*").eq("project_id", project.id),
+    // [추가] 파티 추가·수정 폼의 캐릭터 목록용: 캐릭터별 메소 카드에서 직접 추가한 캐릭터 (0011)
+    supabase.from("extra_characters").select("user_id, character_name").eq("project_id", project.id),
   ]);
 
   type MemberRow = { user_id: string; role: string };
   const memberRows = (members ?? []) as MemberRow[];
   const memberIds = memberRows.map((m) => m.user_id);
   const { data: memberProfiles } = memberIds.length
-    ? await supabase.from("profiles").select("id, display_name").in("id", memberIds)
-    : { data: [] as { id: string; display_name: string }[] };
+    ? await supabase.from("profiles").select("id, display_name, nexon_character_name").in("id", memberIds)
+    : { data: [] as { id: string; display_name: string; nexon_character_name: string | null }[] };
   const profileNameById = new Map((memberProfiles ?? []).map((p) => [p.id, p.display_name]));
   const memberList = memberRows.map((m) => ({
     id: m.user_id,
@@ -59,6 +62,22 @@ export default async function ProjectSettingsPage({ params }: { params: { projec
     memberName: profileNameById.get(c.user_id) ?? "이름없음",
   }));
 
+  // [추가] 그룹원별 캐릭터 목록 (파티 추가·수정 폼에서 고를 캐릭터).
+  // 웹에는 "캐릭터 목록" 테이블이 따로 없어서 이미 있는 데이터를 사람별로 합친다:
+  // 넥슨에서 불러온 후보 캐릭터 + 이미 파티에 들어간 캐릭터 + 직접 추가한 캐릭터 + 프로필의 넥슨 대표 캐릭터
+  const charKeys = new Set<string>();
+  const memberChars: { userId: string; characterName: string }[] = [];
+  const addChar = (userId: string, name: string | null | undefined) => {
+    const n = (name ?? "").trim();
+    if (!n || !memberIds.includes(userId) || charKeys.has(`${userId}|${n}`)) return;
+    charKeys.add(`${userId}|${n}`);
+    memberChars.push({ userId, characterName: n });
+  };
+  for (const c of bossCandidates ?? []) addChar(c.user_id, c.character_name);
+  for (const pm of (partyMembers ?? []) as { user_id: string; character_name: string | null }[]) addChar(pm.user_id, pm.character_name);
+  for (const e of extraChars ?? []) addChar(e.user_id, e.character_name);
+  for (const p of memberProfiles ?? []) addChar(p.id, p.nexon_character_name);
+
   return (
     <div className="flex flex-col gap-4">
       <InviteCodeCard inviteCode={project.invite_code} members={memberList} />
@@ -68,6 +87,7 @@ export default async function ProjectSettingsPage({ params }: { params: { projec
         parties={partyList}
         members={memberList}
         candidates={candidateList}
+        memberChars={memberChars} // [추가]
       />
 
       <div className="card flex flex-col gap-3">
