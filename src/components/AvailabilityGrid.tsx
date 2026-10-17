@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { DAYS, HOURS, type Day } from "@/lib/scheduling/constants";
+import { isDayPastThisWeek } from "@/lib/scheduling/dates";
 import type { RawAvailabilityRow } from "@/lib/scheduling/snapshot";
 
 interface Props {
@@ -130,6 +131,10 @@ export default function AvailabilityGrid({ projectId, userId, weekMode, initialS
     dragOver(day, hour);
   }
 
+  // [추가] "이번주" 탭에서 이미 지난 요일. 가능 시간은 매주 반복되는 시간표라 데이터는 지우지 않고
+  // (다음주에도 쓰인다) 화면에서만 흐리게 + "지남" 표시를 한다. 후보 계산은 이미 지난 요일을 뺀다.
+  const pastDays = new Set<Day>(weekMode === "this" ? DAYS.filter((d) => isDayPastThisWeek(d)) : []);
+
   return (
     <div className="overflow-x-auto">
       <table className="w-full border-separate border-spacing-[2px] text-center select-none">
@@ -139,6 +144,7 @@ export default function AvailabilityGrid({ projectId, userId, weekMode, initialS
             {DAYS.map((d) => (
               <th key={d} className="text-xs font-bold" style={{ color: "var(--muted)" }}>
                 {d}
+                {pastDays.has(d) && <div className="text-[10px] font-normal">지남</div>}
               </th>
             ))}
           </tr>
@@ -146,7 +152,8 @@ export default function AvailabilityGrid({ projectId, userId, weekMode, initialS
         <tbody>
           {HOURS.map((h) => (
             <tr key={h}>
-              <td className="text-[10px]" style={{ color: "var(--muted)" }}>
+              {/* [변경] 시간 숫자를 칸 높이에 맞춰 세로 가운데 정렬 */}
+              <td className="text-[10px] align-middle" style={{ color: "var(--muted)" }}>
                 {h}
               </td>
               {DAYS.map((d) => {
@@ -165,7 +172,7 @@ export default function AvailabilityGrid({ projectId, userId, weekMode, initialS
                       onMouseEnter={() => dragOver(d, h)}
                       onTouchStart={() => startDrag(d, h)}
                       onTouchMove={handleTouchMove}
-                      className={"slot-cell" + (on ? " on" : "")}
+                      className={"slot-cell" + (on ? " on" : "") + (pastDays.has(d) ? " opacity-40" : "")}
                       aria-pressed={on}
                       aria-label={`${d}요일 ${h}시`}
                     />

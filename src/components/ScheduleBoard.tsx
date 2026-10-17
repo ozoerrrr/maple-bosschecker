@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import {
@@ -13,7 +13,12 @@ import {
   type RawParty,
 } from "@/lib/scheduling/snapshot";
 import { formatMeso, mesoPerPerson } from "@/lib/scheduling/meso";
+import { reconcileConfirmed, reconcileNextConfirmed } from "@/lib/scheduling/parties";
 import AvailabilityGrid from "@/components/AvailabilityGrid";
+import MonthlyBlockCalendar from "@/components/MonthlyBlockCalendar";
+import MySchedule from "@/components/MySchedule";
+import CharacterMesoCard from "@/components/CharacterMesoCard";
+import type { ExtraCharRow, SoloClearRow, SoloPlanRow } from "@/lib/scheduling/solo";
 import BossList from "@/components/BossList";
 import ImportBossesFromNexon from "@/components/ImportBossesFromNexon";
 
@@ -27,6 +32,7 @@ interface Props {
   projectId: string;
   maxPerHour: number;
   currentUserId: string;
+  isOwner: boolean; // [추가] 그룹장 여부 (파티 일정 수정 권한 판단용)
   members: Member[];
   bosses: RawBoss[];
   parties: RawParty[];
@@ -36,6 +42,10 @@ interface Props {
   confirmations: RawConfirmationRow[];
   nextConfirmations: RawNextConfirmationRow[];
   myCharacterName: string | null;
+  // [추가] 캐릭터별 메소·솔로 보스 카드용 (0011)
+  soloPlans: SoloPlanRow[];
+  soloClears: SoloClearRow[];
+  extraChars: ExtraCharRow[];
   candidates: {
     id: string;
     bossId: string;
@@ -93,10 +103,39 @@ export default function ScheduleBoard(props: Props) {
     [props]
   );
 
+  // [추가] 확정 재검증: 가능 시간·안 되는 날짜가 바뀌어 파티원 모두가 가능한 시간이 아니게 된
+  // 확정을 자동으로 푼다. 내가 수정할 수 있는 파티(파티원 또는 그룹장)만 처리한다(0009와 같은 기준).
+  // 한 번 시도한 파티는 다시 시도하지 않아, 삭제가 실패해도 무한 반복하지 않는다.
+  const reconcileTriedRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    const canEdit = (pid: string) =>
+      props.isOwner || !!snapshot.parties.find((p) => p.id === pid)?.members.includes(props.currentUserId);
+    const fresh = (ids: string[]) => ids.filter((id) => canEdit(id) && !reconcileTriedRef.current.has(id));
+    const stale = fresh(reconcileConfirmed(snapshot));
+    const staleNext = fresh(reconcileNextConfirmed(snapshot));
+    if (!stale.length && !staleNext.length) return;
+    [...stale, ...staleNext].forEach((id) => reconcileTriedRef.current.add(id));
+    (async () => {
+      if (stale.length) await supabase.from("party_confirmations").delete().in("party_id", stale);
+      if (staleNext.length) await supabase.from("next_party_confirmations").delete().in("party_id", staleNext);
+      router.refresh();
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [snapshot]);
+
   const memberName = useMemo(() => {
     const m = new Map(props.members.map((x) => [x.id, x.name]));
     return (uid: string) => m.get(uid) ?? "?";
   }, [props.members]);
+
+  // [추가] 넥슨 불러오기 창에 처음부터 채워 둘 내 캐릭터 이름
+  // (내가 후보로 등록한 캐릭터 + 직접 추가한 캐릭터). 페이지를 옮겨도 목록이 유지된다.
+  const mySavedCharNames = useMemo(() => {
+    const names = new Set<string>();
+    for (const c of props.candidates) if (c.userId === props.currentUserId) names.add(c.characterName);
+    for (const e of props.extraChars) if (e.user_id === props.currentUserId) names.add(e.character_name);
+    return [...names];
+  }, [props.candidates, props.extraChars, props.currentUserId]);
 
   const existingCandidates = useMemo(() => {
     const bossById = new Map(props.bosses.map((b) => [b.id, b]));
@@ -178,6 +217,7 @@ export default function ScheduleBoard(props: Props) {
         existingCandidates={existingCandidates}
         myCharacterName={props.myCharacterName}
         currentUserId={props.currentUserId}
+        savedCharacterNames={mySavedCharNames} // [추가]
       />
 
       {/* 3. 내 상태 및 가능 시간 설정 퀵 바 (팝업 트리거) */}
@@ -261,16 +301,41 @@ export default function ScheduleBoard(props: Props) {
         </section>
       )}
 
+      {/* [추가] 내 스케줄: 내가 속한 파티를 시간순으로 모아 본다 */}
+      <MySchedule
+        currentUserId={props.currentUserId}
+        bosses={props.bosses}
+        parties={props.parties}
+        confirmations={props.confirmations}
+        nextConfirmations={props.nextConfirmations}
+        memberName={memberName}
+      />
+
       {/* 4. 보스 파티 일정 목록 */}
       <BossList
         projectId={props.projectId}
         maxPerHour={props.maxPerHour}
         currentUserId={props.currentUserId}
+        isOwner={props.isOwner} // [추가] 권한 판단용으로 PartyCard까지 전달
         weekMode={weekMode}
         bosses={props.bosses}
         parties={props.parties}
         snapshot={snapshot}
         memberName={memberName}
+        onChanged={refresh}
+      />
+
+      {/* [추가] 캐릭터별 메소 · 솔로 보스 */}
+      <CharacterMesoCard
+        projectId={props.projectId}
+        currentUserId={props.currentUserId}
+        weekMode={weekMode}
+        bosses={props.bosses}
+        parties={props.parties}
+        soloPlans={props.soloPlans}
+        soloClears={props.soloClears}
+        extraChars={props.extraChars}
+        candidates={props.candidates} // [추가]
         onChanged={refresh}
       />
 
@@ -311,6 +376,17 @@ export default function ScheduleBoard(props: Props) {
                 ).filter((r) => r.user_id === props.currentUserId)}
                 onSaved={refresh}
               />
+              {/* [추가] 안 되는 날짜(월간 불가 날짜) 입력 달력: 날짜 기준이라 "이번주" 탭에서만 보여준다 */}
+              {weekMode === "this" && (
+                <MonthlyBlockCalendar
+                  projectId={props.projectId}
+                  userId={props.currentUserId}
+                  initialDates={props.monthlyBlock
+                    .filter((r) => r.user_id === props.currentUserId)
+                    .map((r) => r.blocked_date)}
+                  onSaved={refresh}
+                />
+              )}
             </div>
 
             {/* 모달 닫기 푸터 */}

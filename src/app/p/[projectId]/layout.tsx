@@ -25,7 +25,7 @@ export default async function ProjectLayout({
           </Link>
           {role === "owner" && (
             <Link href={`/p/${project.id}/settings`} className="btn-secondary">
-              설정
+              그룹 관리
             </Link>
           )}
         </nav>

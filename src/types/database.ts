@@ -131,6 +131,40 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["monthly_block"]["Row"]>;
         Relationships: NoRelationships;
       };
+      // [추가] 0011 캐릭터별 솔로 보스 계획
+      solo_plans: {
+        Row: {
+          project_id: string;
+          user_id: string;
+          character_name: string;
+          boss_name: string;
+          difficulty: string;
+          party_size: number;
+          week: "this" | "next";
+          updated_at: string;
+        };
+        Insert: Omit<Database["public"]["Tables"]["solo_plans"]["Row"], "updated_at" | "party_size" | "week"> & {
+          party_size?: number;
+          week?: "this" | "next";
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["solo_plans"]["Row"]>;
+        Relationships: NoRelationships;
+      };
+      // [추가] 0011 솔로 보스 클리어 체크
+      solo_clears: {
+        Row: { project_id: string; user_id: string; character_name: string; boss_name: string; period_key: string };
+        Insert: { project_id: string; user_id: string; character_name: string; boss_name: string; period_key: string };
+        Update: Partial<Database["public"]["Tables"]["solo_clears"]["Row"]>;
+        Relationships: NoRelationships;
+      };
+      // [추가] 0011 직접 추가한 캐릭터
+      extra_characters: {
+        Row: { project_id: string; user_id: string; character_name: string; created_at: string };
+        Insert: { project_id: string; user_id: string; character_name: string; created_at?: string };
+        Update: Partial<Database["public"]["Tables"]["extra_characters"]["Row"]>;
+        Relationships: NoRelationships;
+      };
       party_confirmations: {
         Row: {
           party_id: string;
@@ -163,7 +197,14 @@ export type Database = {
       };
     };
     Views: Record<string, never>;
-    Functions: Record<string, never>;
+    // [변경] supabase.rpc()로 부르는 DB 함수의 인자·반환 타입
+    Functions: {
+      debug_whoami: { Args: Record<string, never>; Returns: unknown };
+      // [추가] 0010 주간 리셋 (이번주 처음 호출 때만 true)
+      apply_weekly_reset: { Args: { p_project_id: string }; Returns: boolean };
+      // [추가] 0010 월간보스 우선: 밀어낸 주간 확정 수
+      push_out_weekly_for_monthly: { Args: { p_party_id: string }; Returns: number };
+    };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;
   };

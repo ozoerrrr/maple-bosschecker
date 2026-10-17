@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { normalizeNexonDifficulty } from "@/lib/scheduling/meso";
+import DifficultyBadge from "@/components/DifficultyBadge";
 import type { Difficulty } from "@/lib/scheduling/types";
 
 interface FetchedBoss {
@@ -33,6 +34,7 @@ interface Props {
   existingCandidates: ExistingCandidate[];
   /** 프로필에 연동해둔 내 본캐 닉네임. 캐릭터 입력칸의 기본값으로 쓴다. */
   myCharacterName?: string | null;
+  savedCharacterNames?: string[]; // [추가] 이미 저장된 내 캐릭터 이름(초기 목록용)
   currentUserId: string;
 }
 
@@ -64,13 +66,18 @@ export default function ImportBossesFromNexon({
   existingCandidates,
   myCharacterName,
   currentUserId,
+  savedCharacterNames,
 }: Props) {
   const supabase = createClient();
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [characterNames, setCharacterNames] = useState<string[]>(myCharacterName ? [myCharacterName] : []);
+  // [추가] 본캐 + 저장된 내 캐릭터로 시작한다 (본캐가 맨 앞, 중복 제거).
+  // 화면 안에서만 들고 있던 목록이라 페이지를 옮기면 본캐만 남던 문제를 막는다.
+  const [characterNames, setCharacterNames] = useState<string[]>(() => [
+    ...new Set([...(myCharacterName ? [myCharacterName] : []), ...(savedCharacterNames ?? [])]),
+  ]);
   const [nameInput, setNameInput] = useState("");
   const [fetched, setFetched] = useState(false);
   const [charErrors, setCharErrors] = useState<{ characterName: string; error: string }[]>([]);
@@ -80,10 +87,6 @@ export default function ImportBossesFromNexon({
 
   function bossKey(b: FetchedBoss) {
     return `${b.characterName}__${b.name}__${b.difficulty}`;
-  }
-
-  function displayName(b: FetchedBoss) {
-    return b.difficulty ? `${b.name} ${b.difficulty}` : b.name;
   }
 
   function addCharacterName() {
@@ -118,6 +121,17 @@ export default function ImportBossesFromNexon({
     const results: CharacterResult[] = data.results ?? [];
     const failed = results.filter((r) => r.error).map((r) => ({ characterName: r.character_name, error: r.error! }));
     setCharErrors(failed);
+
+    // [추가] 조회에 성공한 캐릭터를 내 캐릭터 목록(extra_characters)에 저장한다.
+    // 이미 있으면 무시한다. 보스를 하나도 등록하지 않은 부캐도 다음에 다시 보이게 하려는 것.
+    const okNames = results.filter((r) => !r.error).map((r) => r.character_name);
+    if (okNames.length > 0) {
+      await supabase.from("extra_characters").upsert(
+        okNames.map((n) => ({ project_id: projectId, user_id: currentUserId, character_name: n })),
+        { onConflict: "project_id,user_id,character_name", ignoreDuplicates: true }
+      );
+      router.refresh(); // [추가] 저장한 부캐가 메소 카드에 바로 나오게 새로고침
+    }
 
     const allBosses: FetchedBoss[] = results.flatMap((r) =>
       r.error ? [] : r.bosses.map((b) => ({ ...b, characterName: r.character_name }))
@@ -341,7 +355,8 @@ export default function ImportBossesFromNexon({
                   <div key={`${g.name}__${g.difficulty}`} className="flex flex-col gap-1">
                     <p className="label">
                       {g.name}
-                      {g.difficulty ? ` ${g.difficulty}` : ""}
+                      {/* [변경] 넥슨이 주는 영문 난이도 대신 난이도 배지 */}
+                      <DifficultyBadge difficulty={normalizeNexonDifficulty(g.difficulty)} className="ml-1.5" />
                     </p>
                     <div className="flex flex-wrap gap-2">
                       {g.chars.map((b) => {

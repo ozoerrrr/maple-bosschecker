@@ -38,8 +38,7 @@ html, body {
 }
 
 /* 2. 카드: 어두운 박스 -> 화이트 카드 */
-.card,
-.boss-group {
+.card {
   background-color: #FFFFFF !important;
   border: 1px solid #E2E8F0 !important;
   border-radius: 16px !important;
@@ -51,6 +50,53 @@ html, body {
   border-color: #CBD5E1 !important;
   box-shadow: 0 4px 14px rgba(35, 41, 54, 0.06) !important;
 }
+
+/* [추가] 보스 목록 카드 안의 보스별 카드 (레이드 시간표 .boss-group 모양) */
+.boss-group {
+  border: 1px solid #E2E8F0;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #FFFFFF;
+}
+.boss-group-head {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-align: left;
+  padding: 10px 14px;
+  background: #F4F6FC;
+  font-weight: 700;
+  font-size: 15px;
+  cursor: pointer;
+}
+.boss-group-head:hover { background: #EDF0F8; }
+.boss-group-title { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; }
+.boss-group-note { font-size: 11px; font-weight: 400; color: #6B7280; }
+.boss-group-summary { flex: none; font-size: 12px; font-weight: 700; color: #6B7280; font-variant-numeric: tabular-nums; }
+.boss-group-chevron { flex: none; font-size: 12px; color: #6B7280; transition: transform .15s ease; }
+.boss-group.open .boss-group-chevron { transform: rotate(90deg); }
+.boss-group-body[hidden] { display: none; }
+.boss-group-meso { font-size: 12px; font-weight: 700; color: #C9791A; }
+
+/* [추가] 펼친 보스 카드 안의 파티 줄: [파티 이름] | 참여자 칩 ...... [확정 칩] (클리어) */
+.party-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px 14px; border-top: 1px solid #E2E8F0; }
+.party-row:first-child { border-top: none; }
+.party-name { flex: none; font-weight: 700; font-size: 13px; padding-right: 12px; border-right: 1px solid #E2E8F0; }
+.party-members { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.chip.me { border-color: #FF7B29; background: #FFF7ED; }
+.chip-sub { font-weight: 400; color: #64748B; }
+.chip-x { border: none; background: none; color: inherit; cursor: pointer; font-weight: 700; padding: 0 0 0 2px; font-size: 13px; line-height: 1; }
+.chip-x:hover { color: #DC2626; }
+.party-status { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-left: auto; }
+.chip--fixed { border-color: #059669; background: rgba(5, 150, 105, 0.1); color: #047857; }
+.status-text { font-size: 12px; font-weight: 700; color: #6B7280; white-space: nowrap; }
+.confirm-select { border: 1.5px solid #E2E8F0; background: #FFFFFF; border-radius: 8px; padding: 5px 30px 5px 10px; font-size: 12.5px; font-weight: 700; max-width: 200px; }
+/* [추가] 클리어 타원 버튼 (레이드 시간표 클리어 버튼 색). done = 클리어한 상태 */
+.clear-btn { border: 1.5px solid #B45309; background: rgba(180, 83, 9, 0.1); color: #B45309; border-radius: 999px; padding: 4px 14px; font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+.clear-btn:hover:not(:disabled) { filter: brightness(1.05); }
+.clear-btn.done { background: #B45309; color: #FFFFFF; }
+.clear-btn:disabled { cursor: default; }
 
 /* 3. 메인 오렌지 버튼 */
 .btn-primary,
@@ -96,9 +142,16 @@ button[type="submit"].btn-primary,
 
 /* 5. 시간표 슬롯 셀 스타일 */
 .slot-cell {
+  /* [추가] 시간 칸 크기: 내용이 없는 버튼이라 크기를 직접 줘야 점으로 줄어들지 않는다.
+     가로는 요일 칸을 꽉 채우고, 세로는 손가락으로 누르기 쉬운 높이로 */
+  display: block;
+  width: 100%;
+  min-width: 28px;
+  height: 28px;
   background-color: #FFFFFF !important;
   border: 1px solid #E2E8F0 !important;
   border-radius: 6px !important;
+  cursor: pointer;
 }
 .slot-cell:hover {
   background-color: #FFF7ED !important;
@@ -122,6 +175,69 @@ input, select, textarea {
 input:focus, select:focus, textarea:focus {
   border-color: #FF7B29 !important;
   box-shadow: 0 0 0 3px rgba(255, 123, 41, 0.15) !important;
+}
+
+/* [추가] 디자인 개편 때 빠진 공통 스타일: 칩(이름표), 알약 선택 버튼, 작은 라벨 */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  border: 1px solid #E2E8F0;
+  background: #F8FAFC;
+  font-size: 12px;
+  font-weight: 600;
+  color: #334155;
+}
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  border: 1.5px solid #E2E8F0;
+  background: #FFFFFF;
+  font-size: 13px;
+  font-weight: 600;
+  color: #475569;
+  cursor: pointer;
+  user-select: none;
+}
+.pill:hover { border-color: #FED7AA; }
+.pill.active { border-color: #FF7B29; background: #FFF7ED; color: #EA580C; }
+.label { font-size: 12px; color: #64748B; }
+
+/* [추가] 난이도 배지 (레이드 시간표와 같은 색). 난이도는 어디서든 이 배지로만 표시한다 (DifficultyBadge.tsx) */
+.diff-badge {
+  display: inline-block;
+  vertical-align: 1px;
+  padding: 2px 7px;
+  border-radius: 4px;
+  border: 1px solid rgba(0, 0, 0, 0.35);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  line-height: 1.35;
+  white-space: nowrap;
+}
+.diff-easy { background-color: #8b9099; color: #fff; }
+.diff-normal { background-color: #2563eb; color: #fff; }
+.diff-hard { background-color: #c81e1e; color: #fff; }
+.diff-chaos { background-color: #1a1a1a; color: #f2c14e; }
+.diff-extreme { background-color: #1a1a1a; color: #ff3b3b; }
+
+/* [추가] 드롭다운(select) 화살표 위치 조정
+   브라우저 기본 화살표는 위치를 바꿀 수 없어서 숨기고(appearance: none),
+   같은 모양의 꺽쇠를 배경 이미지로 그려 오른쪽 여백을 직접 정한다. */
+select {
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%2364748B' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") !important;
+  background-repeat: no-repeat !important;
+  background-position: right 16px center !important; /* 꺽쇠와 오른쪽 테두리 사이 거리 */
+  background-size: 14px !important;
+  padding-right: 40px !important; /* 글자가 꺽쇠 밑으로 겹치지 않게 */
 }
 
 /* 7. 텍스트 */
