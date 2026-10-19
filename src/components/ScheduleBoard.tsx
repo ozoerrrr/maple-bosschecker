@@ -38,6 +38,7 @@ interface Props {
   members: Member[];
   bosses: RawBoss[];
   parties: RawParty[];
+  nextParties: RawParty[]; // [추가] 0017: 다음주에 보일 파티 (다음주 미리입력 토글)
   availability: RawAvailabilityRow[];
   nextAvailability: RawAvailabilityRow[];
   monthlyBlock: RawMonthlyBlockRow[];
@@ -96,6 +97,7 @@ export default function ScheduleBoard(props: Props) {
       buildSnapshot({
         bosses: props.bosses,
         parties: props.parties,
+        nextParties: props.nextParties, // [추가] 0017
         availability: props.availability,
         nextAvailability: props.nextAvailability,
         monthlyBlock: props.monthlyBlock,
@@ -112,7 +114,9 @@ export default function ScheduleBoard(props: Props) {
   const reconcileTriedRef = useRef<Set<string>>(new Set());
   useEffect(() => {
     const canEdit = (pid: string) =>
-      props.isOwner || !!snapshot.parties.find((p) => p.id === pid)?.members.includes(props.currentUserId);
+      props.isOwner ||
+      // [변경] 0017: 다음주 전용 파티도 파티원이면 수정 가능
+      !![...snapshot.parties, ...snapshot.nextParties].find((p) => p.id === pid)?.members.includes(props.currentUserId);
     const fresh = (ids: string[]) => ids.filter((id) => canEdit(id) && !reconcileTriedRef.current.has(id));
     const stale = fresh(reconcileConfirmed(snapshot));
     const staleNext = fresh(reconcileNextConfirmed(snapshot));
@@ -239,8 +243,10 @@ export default function ScheduleBoard(props: Props) {
         confirmed={snapshot.confirmed} // [추가] 인게임 완료 -> 파티 클리어 반영
       />
 
-      {/* 3. 내 상태 및 가능 시간 설정 퀵 바 (팝업 트리거) */}
-      <section className="flex flex-wrap items-center justify-between gap-4 p-4 rounded-2xl bg-white border border-slate-200/90 shadow-sm">
+      {/* 3. 내 상태 및 가능 시간 설정 퀵 바 (팝업 트리거)
+          [추가] 스크롤해도 사이트 상단 바(약 61px) 바로 아래에 붙어서 따라온다 (sticky).
+          z-30: 보스 목록 등 카드 위로, 상단 바(z-40)와 가능 시간 팝업보다는 아래로 */}
+      <section className="sticky top-[61px] z-30 flex flex-wrap items-center justify-between gap-4 p-4 rounded-2xl bg-white border border-slate-200/90 shadow-md">
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-2">
             <span className="text-sm font-bold text-slate-800">
@@ -300,6 +306,8 @@ export default function ScheduleBoard(props: Props) {
         currentUserId={props.currentUserId}
         bosses={props.bosses}
         parties={props.parties}
+        nextParties={props.nextParties} // [추가] 0017
+        weekMode={weekMode} // [추가] 다음주 미리입력 토글을 따른다
         confirmations={props.confirmations}
         nextConfirmations={props.nextConfirmations}
         memberName={memberName}
@@ -313,7 +321,7 @@ export default function ScheduleBoard(props: Props) {
         isOwner={props.isOwner} // [추가] 권한 판단용으로 PartyCard까지 전달
         weekMode={weekMode}
         bosses={props.bosses}
-        parties={props.parties}
+        parties={weekMode === "next" ? props.nextParties : props.parties} // [변경] 0017: 다음주 탭은 다음주 파티
         snapshot={snapshot}
         memberName={memberName}
         onChanged={refresh}
@@ -325,7 +333,7 @@ export default function ScheduleBoard(props: Props) {
         currentUserId={props.currentUserId}
         weekMode={weekMode}
         bosses={props.bosses}
-        parties={props.parties}
+        parties={weekMode === "next" ? props.nextParties : props.parties} // [변경] 0017: 다음주 탭은 다음주 파티로 잠금·메소 계산
         soloPlans={props.soloPlans}
         soloClears={props.soloClears}
         extraChars={props.extraChars}

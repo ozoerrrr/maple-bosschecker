@@ -57,13 +57,13 @@ export default function TransferOwnershipButton({ projectId, members }: Props) {
     <div className="flex flex-col gap-2">
       {!open ? (
         <button onClick={() => setOpen(true)} className="btn-secondary self-start">
-          그룹장 양도
+          운영자 양도 {/* [변경] 직책 표기를 "운영자"로 통일 */}
         </button>
       ) : (
         <div className="flex flex-col gap-2 rounded-lg p-3" style={{ border: "1.5px dashed var(--danger)" }}>
           <p className="sub">양도하면 나는 즉시 일반 멤버가 되고, 그룹 설정을 다시 할 수 없어요.</p>
           <select value={targetId} onChange={(e) => { setTargetId(e.target.value); setConfirming(false); }} className="input">
-            <option value="">새 그룹장 선택</option>
+            <option value="">새 운영자 선택</option>
             {members.map((m) => (
               <option key={m.id} value={m.id}>
                 {m.name}

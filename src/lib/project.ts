@@ -20,5 +20,5 @@ export async function requireProjectMember(projectId: string) {
     .maybeSingle();
   if (!membership) notFound();
 
-  return { supabase, user, project, role: membership.role as "owner" | "member" };
+  return { supabase, user, project, role: membership.role as "owner" | "manager" | "member" }; // [변경] 0018: 부운영자(manager) 추가
 }

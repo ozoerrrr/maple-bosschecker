@@ -12,6 +12,8 @@ interface Props {
   currentUserId: string;
   bosses: RawBoss[];
   parties: RawParty[];
+  nextParties: RawParty[]; // [추가] 0017: 다음주에 보일 파티
+  weekMode: "this" | "next"; // [추가] 다음주 미리입력 토글
   confirmations: RawConfirmationRow[];
   nextConfirmations: RawNextConfirmationRow[];
   memberName: (uid: string) => string;
@@ -34,7 +36,7 @@ const KIND_ORDER: Record<Kind, number> = { monthly: 0, weekly: 1, next: 2, pendi
 // 내가 속한 파티를 월간 확정 -> 주간 확정 -> 다음주 미리확정 -> 미확정 순으로 모아 보여준다.
 // [전체보기 / 사람별 / 캐릭별] 토글로 묶는 기준을 바꾸고, 항목을 누르면 보스 목록의 그 파티로 이동한다.
 // 이미 완료(클리어)한 파티는 보여주지 않는다.
-export default function MySchedule({ currentUserId: me, bosses, parties, confirmations, nextConfirmations, memberName }: Props) {
+export default function MySchedule({ currentUserId: me, bosses, parties, nextParties, weekMode, confirmations, nextConfirmations, memberName }: Props) {
   const [view, setView] = useState<View>("all");
 
   const items = useMemo(() => {
@@ -42,13 +44,30 @@ export default function MySchedule({ currentUserId: me, bosses, parties, confirm
     const confBy = new Map(confirmations.map((c) => [c.party_id, c]));
     const nextBy = new Map(nextConfirmations.map((c) => [c.party_id, c]));
     const out: Item[] = [];
-    for (const p of parties) {
+    // [변경] 이번주 탭은 이번주 파티의 확정/미확정, 다음주 탭은 다음주 파티의 미리확정/미확정을 보여준다.
+    // 월간 보스는 주 구분이 없어서 두 탭 모두 같은 파티·같은 확정으로 보인다.
+    for (const p of weekMode === "next" ? nextParties : parties) {
       if (!p.members.some((m) => m.userId === me)) continue;
       const boss = bossById.get(p.boss_id);
       if (!boss) continue;
       const c = confBy.get(p.id);
-      if (c?.cleared) continue;
       const bossOrder = String(boss.sort_order).padStart(4, "0");
+      if (weekMode === "next" && boss.period === "weekly") {
+        const n = nextBy.get(p.id);
+        if (n?.day && n.hour != null) {
+          out.push({
+            party: p,
+            boss,
+            kind: "next",
+            sortKey: `${DAY_INDEX[n.day as Day]}-${String(n.hour).padStart(2, "0")}`,
+            when: `다음주\n${slotLabel(n.day as Day, n.hour)}`, // 다음주 ⏎ 목 21시
+          });
+        } else {
+          out.push({ party: p, boss, kind: "pending", sortKey: bossOrder, when: "미확정" });
+        }
+        continue;
+      }
+      if (c?.cleared) continue;
       if (boss.period === "monthly" && c?.confirmed_date && c.hour != null) {
         out.push({
           party: p,
@@ -68,19 +87,9 @@ export default function MySchedule({ currentUserId: me, bosses, parties, confirm
       } else {
         out.push({ party: p, boss, kind: "pending", sortKey: bossOrder, when: "미확정" });
       }
-      const n = nextBy.get(p.id);
-      if (boss.period === "weekly" && n?.day && n.hour != null) {
-        out.push({
-          party: p,
-          boss,
-          kind: "next",
-          sortKey: `${DAY_INDEX[n.day as Day]}-${String(n.hour).padStart(2, "0")}`,
-          when: `다음주\n${slotLabel(n.day as Day, n.hour)}`, // [변경] 다음주 ⏎ 목 21시
-        });
-      }
     }
     return out;
-  }, [bosses, parties, confirmations, nextConfirmations, me]);
+  }, [bosses, parties, nextParties, weekMode, confirmations, nextConfirmations, me]);
 
   // 묶음 나누기: 전체 = 하나, 캐릭별 = 내 캐릭터 이름, 사람별 = 같이 가는 사람마다(여러 묶음에 들어갈 수 있음)
   const groups = useMemo(() => {
@@ -129,7 +138,11 @@ export default function MySchedule({ currentUserId: me, bosses, parties, confirm
   return (
     <section className="card flex flex-col gap-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-base font-bold text-slate-900">📋 내 스케줄</h2>
+        <h2 className="text-base font-bold text-slate-900">
+          📋 내 스케줄
+          {/* [추가] 다음주 미리입력 토글을 켰을 때 표시 */}
+          {weekMode === "next" && <span className="ml-2 text-xs font-bold text-sky-600">다음주</span>}
+        </h2>
         <div className="inline-flex rounded-xl border border-slate-200/60 bg-slate-100 p-1">
           {(
             [

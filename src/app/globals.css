@@ -70,6 +70,11 @@ html, body {
   cursor: pointer;
 }
 .boss-group-head:hover { background: #EDF0F8; }
+/* [추가] 0018: 그룹 관리 보스 줄 헤더 = 펼치기 버튼 + 오른쪽 "보스 삭제" */
+.boss-group-headrow { display: flex; align-items: stretch; background: #F4F6FC; }
+.boss-group-headrow .boss-group-head { flex: 1; min-width: 0; }
+.boss-group-del { flex: none; padding: 0 14px 0 6px; font-size: 12px; color: #64748B; text-decoration: underline; } /* [변경] 0019: 숨기기 (회색) */
+.boss-group-del:hover { background: #EDF0F8; }
 .boss-group-title { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; }
 .boss-group-note { font-size: 11px; font-weight: 400; color: #6B7280; }
 .boss-group-summary { flex: none; font-size: 12px; font-weight: 700; color: #6B7280; font-variant-numeric: tabular-nums; }
