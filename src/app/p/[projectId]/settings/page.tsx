@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { requireProjectMember } from "@/lib/project";
 import BossRosterEditor from "@/components/BossRosterEditor";
+import { splitRosters } from "@/lib/scheduling/snapshot";
 import InviteCodeCard from "@/components/InviteCodeCard";
 import DeleteProjectButton from "@/components/DeleteProjectButton";
 import TransferOwnershipButton from "@/components/TransferOwnershipButton";
@@ -61,6 +62,8 @@ export default async function ProjectSettingsPage({ params }: { params: { projec
     partyMembersByParty.set(pm.party_id, arr);
   }
   const partyList = (parties ?? []).map((p) => ({ ...p, members: partyMembersByParty.get(p.id) ?? [] }));
+  // [추가] 0017: 보스 목록의 [이번주 | 다음주] 토글용으로 나눈다
+  const { thisParties, nextParties } = splitRosters(bosses ?? [], partyList);
 
   // boss_candidates에는 user_id만 있고 표시용 이름은 없어서, 멤버 목록
   // (memberList)에서 JS로 합친다 -- 위 party_members/profiles와 같은 패턴.
@@ -94,7 +97,8 @@ export default async function ProjectSettingsPage({ params }: { params: { projec
       <BossRosterEditor
         projectId={project.id}
         bosses={bosses ?? []}
-        parties={partyList}
+        parties={thisParties} // [변경] 0017: 이번주 파티
+        nextParties={nextParties} // [추가] 0017: 다음주에 보일 파티
         members={memberList}
         candidates={candidateList}
         memberChars={memberChars} // [추가]

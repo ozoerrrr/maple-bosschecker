@@ -27,6 +27,7 @@ import type {
 
 export interface ScheduleSnapshot {
   parties: Party[]; // 월간/주간 섞여 있음 (party.boss로 period 조회)
+  nextParties: Party[]; // [추가] 0017: 다음주에 보일 파티 (다음주 따로인 보스는 다음주 전용 파티)
   bossPeriod: Record<string, "weekly" | "monthly">; // boss_id -> period
   avail: AvailabilityMap;
   nextAvail: AvailabilityMap;
@@ -78,9 +79,20 @@ export function allMembersSet(snap: ScheduleSnapshot, p: Party): boolean {
   });
 }
 
+/** [추가] 다음주 탭용: 파티원 전원이 다음주 가능 시간을 넣었는지 (allMembersSet의 다음주 버전). */
+export function allMembersSetNext(snap: ScheduleSnapshot, p: Party): boolean {
+  return p.members.every((uid) => {
+    const arr = snap.nextAvail[uid];
+    return !!(arr && arr.length);
+  });
+}
+
 /** 이 파티가 확정 가능한 (day,hour) 후보 전체 (원본 candidateSlots). */
 export function candidateSlots(snap: ScheduleSnapshot, p: Party): Slot[] {
   const out: Slot[] = [];
+  // [추가] 시간을 안 넣은 파티원이 있으면 후보를 내지 않는다 (원본의 allMembersSet 가드).
+  // 미입력자는 "아무 때나 가능"으로 계산되므로, 이 가드가 없으면 나 혼자 넣은 시간이 그대로 후보로 뜬다.
+  if (!allMembersSet(snap, p)) return out;
   for (const d of DAYS) {
     if (isDayPastThisWeek(d)) continue;
     for (const h of HOURS) {
@@ -146,6 +158,7 @@ export function candidateMonthlyDates(
   today: Date = new Date()
 ): MonthlyDateCandidate[] {
   const out: MonthlyDateCandidate[] = [];
+  if (!allMembersSet(snap, p)) return out; // [추가] 같은 가드 (월간은 이번주 요일 시간표 기준)
   const todayStr = ymdKey(today.getFullYear(), today.getMonth(), today.getDate());
 
   const thisMonth = { year: today.getFullYear(), month0: today.getMonth() };
@@ -183,7 +196,7 @@ export function lockCountNext(
   excludePartyId?: string
 ): number {
   let n = 0;
-  for (const p of snap.parties) {
+  for (const p of snap.nextParties) { // [변경] 0017: 다음주 한도는 다음주 파티 기준
     if (p.id === excludePartyId) continue;
     if (periodOf(snap, p) === "monthly") continue;
     if (!p.members.includes(uid)) continue;
@@ -200,6 +213,7 @@ export function capOkNext(snap: ScheduleSnapshot, p: Party, day: Day, hour: numb
 
 export function candidateSlotsNext(snap: ScheduleSnapshot, p: Party): Slot[] {
   const out: Slot[] = [];
+  if (!allMembersSetNext(snap, p)) return out; // [추가] 같은 가드 (다음주 시간표 기준)
   for (const d of DAYS) {
     for (const h of HOURS) {
       const everyoneFree = p.members.every((uid) => isAvailableNext(snap.nextAvail, uid, d, h));
@@ -213,7 +227,7 @@ export function candidateSlotsNext(snap: ScheduleSnapshot, p: Party): Slot[] {
 
 export function reconcileNextConfirmed(snap: ScheduleSnapshot): string[] {
   const toClear: string[] = [];
-  for (const p of snap.parties) {
+  for (const p of snap.nextParties) { // [변경] 0017: 다음주 파티 기준
     if (periodOf(snap, p) === "monthly") continue;
     const slot = snap.nextConfirmed[p.id];
     if (!slot) continue;

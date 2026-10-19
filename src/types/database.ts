@@ -67,6 +67,7 @@ export type Database = {
           difficulty: "easy" | "normal" | "hard" | "chaos" | "extreme" | null;
           sort_order: number;
           created_at: string;
+          next_custom: boolean; // [추가] 0017: 다음주 파티를 이번주와 따로 짰는지
         };
         Insert: Partial<Database["public"]["Tables"]["bosses"]["Row"]> & {
           project_id: string;
@@ -83,6 +84,7 @@ export type Database = {
           label: string | null;
           sort_order: number;
           created_at: string;
+          week: "this" | "next"; // [추가] 0017: 이번주 파티 / 다음주 전용 파티
         };
         Insert: Partial<Database["public"]["Tables"]["parties"]["Row"]> & {
           project_id: string;
@@ -225,6 +227,9 @@ export type Database = {
       apply_weekly_reset: { Args: { p_project_id: string }; Returns: boolean };
       // [추가] 0010 월간보스 우선: 밀어낸 주간 확정 수
       push_out_weekly_for_monthly: { Args: { p_party_id: string }; Returns: number };
+      // [추가] 0017 다음주 파티: 다음주 전용 파티 만들기({이번주 id: 다음주 id}) / 이번주와 같게 되돌리기
+      make_next_roster: { Args: { p_boss_id: string }; Returns: Record<string, string> };
+      reset_next_roster: { Args: { p_boss_id: string }; Returns: undefined };
     };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;

@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useMemo, useState, useTransition } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { BOSS_CATALOG, DIFFICULTIES, compareBossOrder, difficultiesOf, displayBossName, parseTrailingDifficulty } from "@/lib/scheduling/meso";
@@ -17,6 +17,7 @@ interface Boss {
   period: "weekly" | "monthly";
   difficulty: Difficulty | null;
   sort_order: number;
+  next_custom?: boolean; // [추가] 0017: 다음주 파티를 이번주와 따로 짰는지
 }
 
 interface PartyMember {
@@ -51,6 +52,7 @@ interface Props {
   projectId: string;
   bosses: Boss[];
   parties: Party[];
+  nextParties: Party[]; // [추가] 0017: 다음주에 보일 파티 (다음주 따로인 보스는 다음주 전용 파티)
   members: Member[];
   candidates: Candidate[];
   memberChars: MemberChar[]; // [추가] 그룹원별 캐릭터 목록 (파티 추가·수정 폼용)
@@ -65,7 +67,7 @@ interface MemberChar {
 // 보스/파티를 직접 CRUD하는 설정 화면. 원본의 하드코딩된 BOSS_ORDER +
 // RAW_PARTIES + "예약된 변경사항" 메커니즘을 대신한다 -- 여기서 하는 모든
 // 조작은 바로 실제 DB 행이라, 재배포나 예약 개념 자체가 필요 없다.
-export default function BossRosterEditor({ projectId, bosses, parties, members, candidates, memberChars }: Props) {
+export default function BossRosterEditor({ projectId, bosses, parties, nextParties, members, candidates, memberChars }: Props) {
   const supabase = createClient();
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -78,9 +80,57 @@ export default function BossRosterEditor({ projectId, bosses, parties, members, 
   const [editingParty, setEditingParty] = useState<Party | null>(null);
   // [추가] 펼친 보스(난이도) 줄 키 집합. 기본은 전부 닫힘 (화면 보기 편의라 로컬 state)
   const [opened, setOpened] = useState<Set<string>>(new Set());
+  // [추가] 0017: 보스 목록을 이번주/다음주 중 어느 주로 보고 고치는지
+  const [week, setWeek] = useState<"this" | "next">("this");
+  const viewParties = week === "next" ? nextParties : parties;
 
   function refresh() {
     router.refresh();
+  }
+
+  // [추가] 0017: 다음주 탭에서 "이번주와 같음"인 보스를 처음 고칠 때, 이번주 파티를 복사해 다음주 전용 파티를 만든다.
+  // 돌려받은 {이번주 파티 id: 다음주 파티 id}로 고치려던 파티를 새 id로 바꿔 잡는다.
+  // 이번주 탭이거나 이미 다음주 따로인 보스면 아무것도 안 하고 빈 맵을 돌려준다.
+  // 화면이 새로고침되기 전에 같은 보스를 또 고치면 옛 id(이번주 파티)를 건드리지 않도록, 받은 맵을 기억해 둔다.
+  const madeNextRef = useRef<Map<string, Record<string, string>>>(new Map());
+  async function ensureNext(bossId: string, alreadyCustom: boolean): Promise<Record<string, string>> {
+    if (week !== "next") return {};
+    const made = madeNextRef.current.get(bossId);
+    if (made) return made;
+    if (alreadyCustom) return {};
+    const { data, error } = await supabase.rpc("make_next_roster", { p_boss_id: bossId });
+    if (error) {
+      alert(`다음주 파티를 만들지 못했어요: ${error.message}`);
+      throw error;
+    }
+    const map = (data ?? {}) as Record<string, string>;
+    madeNextRef.current.set(bossId, map);
+    return map;
+  }
+
+  // [추가] 0017: 다음주 파티를 이번주와 같게 되돌린다 (다음주용으로 바꾼 구성과 그 파티의 미리확정이 지워짐)
+  function resetNext(boss: Boss) {
+    if (!confirm("다음주 파티를 이번주와 같게 되돌릴까요? 다음주용으로 바꾼 파티 구성과 그 파티들의 다음주 미리확정 시간이 지워져요.")) return;
+    startTransition(async () => {
+      await supabase.rpc("reset_next_roster", { p_boss_id: boss.id });
+      madeNextRef.current.delete(boss.id); // 다시 고치면 새로 복사한다
+      refresh();
+    });
+  }
+
+  // [추가] 0017: 파티 수정 폼 열기. 다음주 탭에서 처음 고치는 보스면 다음주 전용 파티를 만든 뒤 그 복사본을 연다
+  function startEdit(boss: Boss, p: Party) {
+    setAddingPartyFor(null);
+    if (week !== "next" || boss.next_custom || madeNextRef.current.has(boss.id)) {
+      const map = madeNextRef.current.get(boss.id) ?? {};
+      setEditingParty(week === "next" ? { ...p, id: map[p.id] ?? p.id } : p);
+      return;
+    }
+    startTransition(async () => {
+      const map = await ensureNext(boss.id, false);
+      setEditingParty({ ...p, id: map[p.id] ?? p.id });
+      refresh();
+    });
   }
 
   // [추가] 드롭다운에서 보스를 고르면 이름·난이도를 함께 맞춘다 (주기는 저장할 때 이름으로 자동 결정)
@@ -117,7 +167,17 @@ export default function BossRosterEditor({ projectId, bosses, parties, members, 
   function openAddParty(name: string, difficulty: Difficulty | null, key = rowKey(name, difficulty)) {
     setOpened((prev) => new Set(prev).add(key));
     setEditingParty(null);
-    if (bosses.some((b) => b.name === name && (b.difficulty ?? null) === difficulty)) {
+    const existing = bosses.find((b) => b.name === name && (b.difficulty ?? null) === difficulty);
+    if (existing) {
+      // [변경] 0017: 다음주 탭에서 처음 고치는 보스면 다음주 전용 파티를 먼저 만든다
+      if (week === "next" && !existing.next_custom) {
+        startTransition(async () => {
+          await ensureNext(existing.id, false);
+          setAddingPartyFor(key);
+          refresh();
+        });
+        return;
+      }
       setAddingPartyFor(key);
       return;
     }
@@ -134,6 +194,7 @@ export default function BossRosterEditor({ projectId, bosses, parties, members, 
         })
         .select("id")
         .single();
+      if (data?.id && week === "next" && !isMonthlyBossName(name)) await ensureNext(data.id, false); // [추가] 0017: 다음주 탭에서 만든 보스는 다음주 전용으로
       if (data?.id) setAddingPartyFor(key);
       refresh();
     });
@@ -180,6 +241,11 @@ export default function BossRosterEditor({ projectId, bosses, parties, members, 
     }
     return out.sort(compareBossOrder);
   }, [bosses]);
+  // [추가] 0017: 다음주 탭에서는 월간 보스(검은 마법사)를 숨긴다 -- 월간은 주 구분 없이 이번주 탭에서 관리
+  const visibleRows =
+    week === "next"
+      ? rows.filter((r) => (r.boss?.period ?? (isMonthlyBossName(r.name) ? "monthly" : "weekly")) !== "monthly")
+      : rows;
 
   // [추가] 파티 추가 폼이 열린 줄로 스크롤 (새로 만든 카드는 새로고침 뒤에 생기므로 bosses도 지켜본다)
   useEffect(() => {
@@ -195,9 +261,10 @@ export default function BossRosterEditor({ projectId, bosses, parties, members, 
     });
   }
 
-  function deleteParty(id: string) {
+  function deleteParty(boss: Boss, id: string) {
     startTransition(async () => {
-      await supabase.from("parties").delete().eq("id", id);
+      const map = await ensureNext(boss.id, !!boss.next_custom); // [추가] 0017: 다음주 탭이면 다음주 전용 복사본에서 지운다
+      await supabase.from("parties").delete().eq("id", map[id] ?? id);
       refresh();
     });
   }
@@ -206,7 +273,8 @@ export default function BossRosterEditor({ projectId, bosses, parties, members, 
   // 수동 추가 멤버는 후보로 되돌릴 캐릭터명이 없어서 그냥 제거만 한다).
   function unassignToCandidate(boss: Boss, party: Party, member: PartyMember) {
     startTransition(async () => {
-      await supabase.from("party_members").delete().eq("party_id", party.id).eq("user_id", member.userId);
+      const map = await ensureNext(boss.id, !!boss.next_custom); // [추가] 0017: 다음주 탭이면 다음주 전용 복사본에서 뺀다
+      await supabase.from("party_members").delete().eq("party_id", map[party.id] ?? party.id).eq("user_id", member.userId);
       if (member.characterName) {
         await supabase.from("boss_candidates").upsert(
           { project_id: projectId, boss_id: boss.id, user_id: member.userId, character_name: member.characterName },
@@ -274,11 +342,44 @@ export default function BossRosterEditor({ projectId, bosses, parties, members, 
       {/* [변경] 보스 목록: 하나의 카드 안에 카탈로그 보스(난이도) 줄을 모두 깔아 둔다 (스케줄 화면 보스 목록과 같은 모양).
           줄을 펼치면 확정된 파티와 "+ 파티 추가"가 나온다. 순서는 compareBossOrder */}
       <section className="card flex flex-col gap-3">
-        <h2 className="text-lg font-bold">🗓️ 보스 목록</h2>
-        {rows.map((row) => {
+        <div className="flex flex-wrap items-center gap-2">
+          <h2 className="text-lg font-bold">🗓️ 보스 목록</h2>
+          {/* [추가] 0017: 이번주 / 다음주 파티 구성 토글 */}
+          <div className="inline-flex rounded-xl border border-slate-200/60 bg-slate-100 p-1">
+            {(
+              [
+                ["this", "이번주"],
+                ["next", "다음주"],
+              ] as ["this" | "next", string][]
+            ).map(([v, label]) => (
+              <button
+                key={v}
+                type="button"
+                onClick={() => {
+                  setWeek(v);
+                  setEditingParty(null);
+                  setAddingPartyFor(null);
+                }}
+                className={
+                  "rounded-lg px-3 py-1 text-xs font-bold transition " +
+                  (week === v ? "bg-white text-orange-600 shadow-sm" : "text-slate-500 hover:text-slate-800")
+                }
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+        {week === "next" && (
+          <p className="sub">
+            다음주 파티는 이번주 파티를 그대로 따라가요. 여기서 고친 보스만 다음주용으로 따로 저장되고, 목요일 0시에 이번주
+            파티가 돼요. 검은 마법사(월간)는 주 구분이 없어서 이번주 탭에서 관리해요.
+          </p>
+        )}
+        {visibleRows.map((row) => {
           const boss = row.boss;
           const bossParties = boss
-            ? parties.filter((p) => p.boss_id === boss.id).sort((a, b) => a.sort_order - b.sort_order)
+            ? viewParties.filter((p) => p.boss_id === boss.id).sort((a, b) => a.sort_order - b.sort_order) // [변경] 0017: 고르는 주의 파티
             : [];
           const bossCandidates = boss ? candidates.filter((c) => c.bossId === boss.id) : [];
           const isOpen = opened.has(row.key);
@@ -289,7 +390,15 @@ export default function BossRosterEditor({ projectId, bosses, parties, members, 
                   {displayBossName(row.name)} {/* 화면에는 넥슨 풀네임으로 */}
                   <DifficultyBadge difficulty={row.difficulty} />
                 </span>
-                <span className="boss-group-summary">파티 {bossParties.length}</span>
+                <span className="boss-group-summary">
+                  {/* [추가] 0017: 다음주 탭에서는 이번주와 같은지/따로인지 표시 */}
+                  {week === "next" && boss && (
+                    <span className={"mr-2 text-[11px] font-bold " + (boss.next_custom ? "text-sky-600" : "text-slate-400")}>
+                      {boss.next_custom ? "다음주 따로" : "이번주와 같음"}
+                    </span>
+                  )}
+                  파티 {bossParties.length}
+                </span>
                 <span className="boss-group-chevron" aria-hidden="true">
                   ▸
                 </span>
@@ -322,10 +431,10 @@ export default function BossRosterEditor({ projectId, bosses, parties, members, 
                         })}
                       </div>
                       <div className="party-status text-xs">
-                        <button onClick={() => setEditingParty(p)} className="underline">
+                        <button disabled={isPending} onClick={() => startEdit(boss!, p)} className="underline">
                           수정
                         </button>
-                        <button onClick={() => deleteParty(p.id)} className="text-red-500 underline">
+                        <button disabled={isPending} onClick={() => deleteParty(boss!, p.id)} className="text-red-500 underline">
                           삭제
                         </button>
                       </div>
@@ -342,6 +451,7 @@ export default function BossRosterEditor({ projectId, bosses, parties, members, 
                           candidates={bossCandidates}
                           siblingParties={bossParties.filter((x) => x.id !== editingParty.id)}
                           sortOrder={editingParty.sort_order}
+                          week={week} // [추가] 0017
                           onDone={() => {
                             setEditingParty(null);
                             refresh();
@@ -362,6 +472,7 @@ export default function BossRosterEditor({ projectId, bosses, parties, members, 
                       candidates={bossCandidates}
                       siblingParties={bossParties}
                       sortOrder={bossParties.length}
+                      week={week} // [추가] 0017
                       onDone={() => {
                         setAddingPartyFor(null);
                         refresh();
@@ -379,9 +490,15 @@ export default function BossRosterEditor({ projectId, bosses, parties, members, 
                       + 파티 추가
                     </button>
                     {/* [변경] 삭제는 DB에 카드가 있는 줄에만. 카탈로그 보스는 지워도 목록에 "파티 0"으로 남는다 */}
-                    {boss && (
+                    {/* [변경] 0017: 보스 삭제는 두 주 모두에 적용되므로 이번주 탭에서만. 다음주 탭에는 "이번주와 같게 되돌리기" */}
+                    {boss && week === "this" && (
                       <button onClick={() => deleteBoss(boss.id)} className="text-xs text-red-500 underline">
                         보스 삭제 {/* [변경] 파티 줄의 "삭제"와 헷갈리지 않게 */}
+                      </button>
+                    )}
+                    {boss && week === "next" && boss.next_custom && (
+                      <button disabled={isPending} onClick={() => resetNext(boss)} className="text-xs text-slate-500 underline">
+                        이번주와 같게 되돌리기
                       </button>
                     )}
                   </div>
@@ -410,6 +527,7 @@ function PartyEditorForm({
   candidates,
   siblingParties,
   sortOrder,
+  week,
   onDone,
   onCancel,
 }: {
@@ -421,6 +539,7 @@ function PartyEditorForm({
   candidates: Candidate[]; // 이 보스의 후보 캐릭터
   siblingParties: Party[]; // 같은 보스의 다른 파티 (수정 중인 파티 자신은 제외)
   sortOrder: number;
+  week: "this" | "next"; // [추가] 0017: 새 파티를 어느 주 파티로 만들지
   onDone: () => void;
   onCancel: () => void;
 }) {
@@ -483,7 +602,7 @@ function PartyEditorForm({
       } else {
         const { data } = await supabase
           .from("parties")
-          .insert({ project_id: projectId, boss_id: boss.id, label: label.trim() || null, sort_order: sortOrder })
+          .insert({ project_id: projectId, boss_id: boss.id, label: label.trim() || null, sort_order: sortOrder, week }) // [변경] 0017: 주 구분
           .select("id")
           .single();
         partyId = data?.id;

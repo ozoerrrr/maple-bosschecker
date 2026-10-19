@@ -1,5 +1,6 @@
 import { requireProjectMember } from "@/lib/project";
 import ScheduleBoard from "@/components/ScheduleBoard";
+import { splitRosters } from "@/lib/scheduling/snapshot";
 
 export default async function ProjectDashboardPage({ params }: { params: { projectId: string } }) {
   const { supabase, user, project, role } = await requireProjectMember(params.projectId);
@@ -87,8 +88,11 @@ export default async function ProjectDashboardPage({ params }: { params: { proje
     boss_id: p.boss_id,
     label: p.label,
     sort_order: p.sort_order,
+    week: p.week, // [추가] 0017
     members: partyMembersByParty.get(p.id) ?? [],
   }));
+  // [추가] 0017 다음주 파티: 이번주 파티와 "다음주에 보일 파티"로 나눈다 (다음주 미리입력 토글용)
+  const { thisParties, nextParties } = splitRosters(bosses ?? [], partyList);
 
   // boss_candidates에는 user_id만 있고 표시용 이름은 없어서, 위에서 만든
   // profileNameById로 JS에서 합친다 (settings/page.tsx와 동일 패턴).
@@ -109,7 +113,8 @@ export default async function ProjectDashboardPage({ params }: { params: { proje
       isOwner={role === "owner"}
       members={memberList}
       bosses={bosses ?? []}
-      parties={partyList}
+      parties={thisParties} // [변경] 0017: 이번주 파티만
+      nextParties={nextParties} // [추가] 0017
       availability={availability ?? []}
       nextAvailability={nextAvailability ?? []}
       monthlyBlock={monthlyBlock ?? []}

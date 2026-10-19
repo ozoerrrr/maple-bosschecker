@@ -66,6 +66,16 @@ export default function PartyCard({ projectId, boss, party, partyIndex, weekMode
     return candidateMonthlyDates(snapshot, partyObj);
   }, [snapshot, partyObj, isMonthly]);
 
+  // [추가] 가능 시간을 아직 안 넣은 파티원 (월간·이번주 탭은 이번주 시간표, 다음주 탭은 다음주 시간표 기준).
+  // 이런 파티원이 있으면 확정 후보를 계산하지 않고 누가 안 넣었는지 보여준다.
+  const missingMembers = useMemo(() => {
+    const src = isMonthly || weekMode === "this" ? snapshot.avail : snapshot.nextAvail;
+    return party.members.filter((m) => !src[m.userId]?.length);
+  }, [party, snapshot, weekMode, isMonthly]);
+  const missingLabel = missingMembers.length
+    ? `시간 미입력: ${missingMembers.map((m) => memberName(m.userId)).join(", ")}`
+    : "";
+
   const isInParty = party.members.some((m) => m.userId === currentUserId);
   // [추가] 확정·완료·해제 권한: 이 파티의 파티원 또는 그룹장만 가능
   // (DB에서도 0009 마이그레이션의 RLS로 같은 규칙을 강제한다)
@@ -247,7 +257,10 @@ export default function PartyCard({ projectId, boss, party, partyIndex, weekMode
         ) : (
           // 확정 전 상태: 시간 선택(또는 안내) + 즉석 클리어 버튼
           <>
-            {isMonthly ? (
+            {missingLabel ? (
+              // [추가] 가능 시간을 안 넣은 파티원이 있으면 드롭다운 대신 안내
+              <span className="status-text">{missingLabel}</span>
+            ) : isMonthly ? (
               monthlyCandidates.length === 0 ? (
                 <span className="status-text" style={{ color: "var(--danger)" }}>
                   겹치는 날짜 없음

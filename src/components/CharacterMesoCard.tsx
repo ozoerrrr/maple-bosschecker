@@ -334,9 +334,12 @@ export default function CharacterMesoCard(props: Props) {
   return (
     <section className="card flex flex-col gap-3">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 className="text-base font-bold text-slate-900">🪙 캐릭터별 메소 · 솔로 보스</h2>
+        <h2 className="text-base font-bold text-slate-900">
+          🪙 캐릭터별 메소 · 솔로 보스
+          {/* [변경] "○○주 기준" 글자 대신 제목 옆 "다음주" 표시로 (이번주는 표시 없음) */}
+          {weekMode === "next" && <span className="ml-2 text-xs font-bold text-sky-600">다음주</span>}
+        </h2>
         <div className="flex items-center gap-2">
-          <span className="text-xs text-slate-500">{weekMode === "next" ? "다음주" : "이번주"} 기준</span>
           {/* [추가] 넥슨 인게임 스케줄러로 솔로 계획·클리어 다시 불러오기 (넥슨 연동한 사람만) */}
           {props.nexonLinked && (
             <button
@@ -368,21 +371,26 @@ export default function CharacterMesoCard(props: Props) {
       )}
       {rows.length > 0 && (
         <p className="text-sm text-slate-600">
-          {/* [변경] 이번주 탭: "획득 / 총" 메소 */}
-          내 캐릭터 합계{" "}
-          <strong>
-            {/* [변경] 획득/총 색 구분 (다 모으면 같은 색) */}
-            {showEarned ? (
-              <MesoProgress earned={earnedSum.weekly} total={sum.party + sum.solo} />
-            ) : (
-              <span className="text-orange-600">{formatMeso(sum.party + sum.solo)}</span>
-            )}
-          </strong>{" "}
-          (파티 {formatMeso(sum.party)} + 솔로 {formatMeso(sum.solo)})
+          {showEarned ? (
+            <>
+              {/* [변경] 이번주: "획득 / 총" 메소(다 모으면 같은 색) + 잔여 메소(총 - 획득) */}
+              내 캐릭터 합계{" "}
+              <strong>
+                <MesoProgress earned={earnedSum.weekly} total={sum.party + sum.solo} />
+              </strong>{" "}
+              (잔여 메소 {formatMeso(Math.max(0, sum.party + sum.solo - earnedSum.weekly))})
+            </>
+          ) : (
+            <>
+              {/* [변경] 다음주: 예상 메소만 */}
+              다음주 예상 메소: <strong className="text-orange-600">{formatMeso(sum.party + sum.solo)}</strong>
+            </>
+          )}
           {sum.monthly > 0 && (
             <>
-              {" "}
-              · 월간(별도){" "}
+              {/* [변경] 월간은 다음 줄로 */}
+              <br />
+              월간(별도){" "}
               <strong>
                 {showEarned ? (
                   <MesoProgress earned={earnedSum.monthly} total={sum.monthly} tone="purple" />
@@ -440,8 +448,16 @@ export default function CharacterMesoCard(props: Props) {
                 <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
                   <span>
                     주간: 파티 {formatMeso(cw.partyMeso)} + 솔로 {formatMeso(cw.soloMeso)}
-                    {cw.monthlyPartyMeso + cw.soloMonthly > 0 &&
-                      ` · 월간(별도): 파티 ${formatMeso(cw.monthlyPartyMeso)} + 솔로 ${formatMeso(cw.soloMonthly)}`}
+                    {/* [추가] 이번주 탭: 잔여 메소(총 - 이번주 획득) */}
+                    {showEarned &&
+                      `(잔여 ${formatMeso(Math.max(0, cw.partyMeso + cw.soloMeso - earnedOf(row).weekly))})`}
+                    {/* [변경] 월간은 다음 줄로 (합계 줄과 같게) */}
+                    {cw.monthlyPartyMeso + cw.soloMonthly > 0 && (
+                      <>
+                        <br />
+                        월간(별도): 파티 {formatMeso(cw.monthlyPartyMeso)} + 솔로 {formatMeso(cw.soloMonthly)}
+                      </>
+                    )}
                   </span>
                   {doneItems.length > 0 && (
                     <button type="button" disabled={isPending} onClick={() => bulkDone(ch)} className="underline">

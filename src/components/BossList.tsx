@@ -84,7 +84,11 @@ export default function BossList(props: Props) {
     // [추가] 보스 목록 전체를 감싸는 큰 카드
     <section className="card flex flex-col gap-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-lg font-bold">🗓️ 보스 목록</h2>
+        <h2 className="text-lg font-bold">
+          🗓️ 보스 목록
+          {/* [추가] 다음주 미리입력 토글을 켰을 때 표시 (내 스케줄·메소 카드와 같은 모양) */}
+          {props.weekMode === "next" && <span className="ml-2 text-xs font-bold text-sky-600">다음주</span>}
+        </h2>
         {/* [추가] 전체 / 내 파티만 토글 */}
         <div className="inline-flex rounded-xl border border-slate-200/60 bg-slate-100 p-1">
           {(

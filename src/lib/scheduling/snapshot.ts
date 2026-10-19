@@ -11,6 +11,7 @@ export interface RawBoss {
   period: "weekly" | "monthly";
   difficulty: Difficulty | null;
   sort_order: number;
+  next_custom?: boolean; // [추가] 0017: 다음주 파티를 이번주와 따로 짰는지
 }
 
 /** party_members 조인 결과 한 행: 누구(user_id)이고, 어떤 캐릭터로 도는지. */
@@ -24,7 +25,25 @@ export interface RawParty {
   boss_id: string;
   label: string | null;
   sort_order: number;
+  week?: "this" | "next"; // [추가] 0017: 없으면 이번주 파티
   members: RawPartyMember[];
+}
+
+/**
+ * [추가] 0017: 파티를 "이번주 파티"와 "다음주에 보일 파티"로 나눈다.
+ * 다음주 따로(next_custom)인 보스는 다음주 전용 파티(week='next'), 아니면 이번주 파티를 그대로 다음주로 쓴다.
+ * 월간 보스는 다음주 따로가 될 수 없어서 항상 이번주 파티가 양쪽에 들어간다.
+ */
+export function splitRosters<P extends { boss_id: string; week?: string | null }>(
+  bosses: { id: string; next_custom?: boolean | null }[],
+  parties: P[]
+): { thisParties: P[]; nextParties: P[] } {
+  const custom = new Set(bosses.filter((b) => b.next_custom).map((b) => b.id));
+  const isThis = (p: P) => (p.week ?? "this") === "this";
+  return {
+    thisParties: parties.filter(isThis),
+    nextParties: parties.filter((p) => (custom.has(p.boss_id) ? p.week === "next" : isThis(p))),
+  };
 }
 
 export interface RawAvailabilityRow {
@@ -73,6 +92,7 @@ function groupMonthlyBlock(rows: RawMonthlyBlockRow[]): MonthlyBlockMap {
 export function buildSnapshot(input: {
   bosses: RawBoss[];
   parties: RawParty[];
+  nextParties?: RawParty[]; // [추가] 0017: 다음주 파티 (없으면 이번주 파티와 같음)
   availability: RawAvailabilityRow[];
   nextAvailability: RawAvailabilityRow[];
   monthlyBlock: RawMonthlyBlockRow[];
@@ -86,14 +106,16 @@ export function buildSnapshot(input: {
   // scheduling/parties.ts의 후보 슬롯 계산은 순수하게 user_id 집합만
   // 필요하므로(누가 어떤 캐릭터인지는 무관), 여기서는 캐릭터명을 뺀
   // user_id 배열로 납작하게 펴서 넘긴다.
-  const parties: Party[] = input.parties.map((p) => ({
+  const toParty = (p: RawParty): Party => ({
     id: p.id,
     project_id: "",
     boss_id: p.boss_id,
     label: p.label,
     sort_order: p.sort_order,
     members: p.members.map((m) => m.userId),
-  }));
+  });
+  const parties: Party[] = input.parties.map(toParty);
+  const nextParties: Party[] = input.nextParties ? input.nextParties.map(toParty) : parties; // [추가] 0017
 
   const confirmed: ConfirmationMap = {};
   for (const c of input.confirmations) {
@@ -113,6 +135,7 @@ export function buildSnapshot(input: {
 
   const snapshot: ScheduleSnapshot = {
     parties,
+    nextParties, // [추가] 0017
     bossPeriod,
     avail: groupAvailability(input.availability),
     nextAvail: groupAvailability(input.nextAvailability),
