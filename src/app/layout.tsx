@@ -1,6 +1,18 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import localFont from "next/font/local";
 import "./globals.css";
+
+// [추가] 메이플스토리 폰트 (레이드 시간표와 같은 글꼴).
+// Light=300, Bold=700 두 파일만 등록하면 브라우저가 굵기 400~500은 Light, 600 이상은 Bold로 그린다.
+const maplestory = localFont({
+  src: [
+    { path: "./fonts/Maplestory-Light.woff2", weight: "300", style: "normal" },
+    { path: "./fonts/Maplestory-Bold.woff2", weight: "700", style: "normal" },
+  ],
+  variable: "--font-maple",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "메이플스토리 보스 레이드 스케줄러",
@@ -9,7 +21,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="ko">
+    <html lang="ko" className={maplestory.variable}>
       <body className="min-h-screen flex flex-col bg-[#F6F8FB] text-[#1E293B]">
         {/* Top Navigation Bar */}
         <header className="bg-white/95 border-b border-[#E2E8F0] sticky top-0 z-40 backdrop-blur-md">

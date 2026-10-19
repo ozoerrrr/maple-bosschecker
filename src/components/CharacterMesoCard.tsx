@@ -2,8 +2,9 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { MESO_TABLE, formatMeso } from "@/lib/scheduling/meso";
+import { MESO_TABLE, displayBossName, formatMeso } from "@/lib/scheduling/meso";
 import DifficultyBadge from "@/components/DifficultyBadge";
+import MesoProgress from "@/components/MesoProgress";
 import {
   WEEKLY_CAP,
   SOLO_MAX,
@@ -19,7 +20,8 @@ import {
   type SoloPlanRow,
   type Week,
 } from "@/lib/scheduling/solo";
-import type { Difficulty } from "@/lib/scheduling/types";
+import type { ConfirmationMap, Difficulty } from "@/lib/scheduling/types";
+import { setPartyCleared } from "@/lib/scheduling/partyClear";
 import type { RawBoss, RawParty } from "@/lib/scheduling/snapshot";
 
 interface Props {
@@ -32,6 +34,11 @@ interface Props {
   soloClears: SoloClearRow[];
   extraChars: ExtraCharRow[];
   candidates: { userId: string; characterName: string }[]; // [추가] 넥슨 후보로 등록한 캐릭터 (부캐 표시용)
+  confirmed: ConfirmationMap; // [추가] 이번주 파티 확정 (파티 보스 클리어 체크박스용)
+  nexonLinked: boolean; // [추가] 넥슨 연동 여부 ("새로고침" 버튼 표시)
+  nexonSyncing: boolean; // [추가] 넥슨 동기화 진행 중
+  nexonSummary: string[]; // [추가] 마지막 동기화 결과 요약
+  onRefreshNexon: () => void; // [추가] "새로고침": 인게임 스케줄러로 솔로 계획·클리어 다시 불러오기
   onChanged: () => void;
 }
 
@@ -157,6 +164,11 @@ export default function CharacterMesoCard(props: Props) {
     });
   }
 
+  // [추가] 파티로 가는 보스의 클리어 체크 = 그 파티의 클리어 상태 (스케줄 보스 목록의 "클리어 ✓"와 같은 값)
+  function setPartyDone(partyId: string, on: boolean) {
+    run(() => setPartyCleared(supabase, partyId, props.confirmed[partyId], on, uid));
+  }
+
   /** 캐릭터의 솔로 보스 일괄 클리어: 하나라도 안 했으면 전부 체크, 전부 했으면 전부 해제. */
   function bulkDone(ch: string) {
     const row = rows.find((r) => r.ch === ch);
@@ -198,6 +210,29 @@ export default function CharacterMesoCard(props: Props) {
     });
   }
 
+  // [추가] 이번주 획득 메소: 클리어한 보스만 더한다 (파티 보스 = 그 파티가 클리어, 솔로 = 클리어 체크).
+  // 메소 카드의 클리어 체크박스와 같은 기준. 월간은 따로 센다.
+  function earnedOf(row: (typeof rows)[number]) {
+    const { ch, cw } = row;
+    const partyDone = (e: { partyId: string; meso: number | null }) =>
+      props.confirmed[e.partyId]?.cleared ? e.meso ?? 0 : 0;
+    const weekly =
+      Object.values(cw.party).reduce((s, e) => s + partyDone(e), 0) +
+      cw.ok.reduce((s, it) => s + (isDone(ch, it.name, false) ? it.meso : 0), 0);
+    const monthly =
+      Object.values(cw.mparty).reduce((s, e) => s + partyDone(e), 0) +
+      cw.monthlyOk.reduce((s, it) => s + (isDone(ch, it.name, true) ? it.meso : 0), 0);
+    return { weekly, monthly };
+  }
+  const earnedSum = rows.reduce(
+    (s, r) => {
+      const e = earnedOf(r);
+      return { weekly: s.weekly + e.weekly, monthly: s.monthly + e.monthly };
+    },
+    { weekly: 0, monthly: 0 }
+  );
+  const showEarned = weekMode === "this"; // 다음주 탭은 아직 클리어가 없어 총 메소만
+
   // ----- 합계 -----
   const sum = rows.reduce(
     (s, r) => ({
@@ -216,14 +251,28 @@ export default function CharacterMesoCard(props: Props) {
     const counted = cur && !row.cw.excluded.has(b.name);
     return (
       <div key={b.name} className="flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-slate-100 py-1.5">
-        <div className="w-28 shrink-0 text-[13px] font-semibold text-slate-700">{b.name}</div>
-        {inParty ? (
+        <div className="w-28 shrink-0 text-[13px] font-semibold text-slate-700">{displayBossName(b.name)}</div>
+        {inParty && (
           <div className="text-xs text-slate-500">
             파티로 진행 중
             <DifficultyBadge difficulty={inParty.difficulty} className="ml-1" />
             {inParty.meso != null && <> · {formatMeso(inParty.meso)}</>}
           </div>
-        ) : (
+        )}
+        {/* [추가] 파티 보스도 클리어 체크 (이번주만). 체크하면 그 파티가 클리어 처리된다 */}
+        {inParty && weekMode === "this" && (
+          <label className="ml-auto inline-flex cursor-pointer items-center gap-1 text-xs text-slate-500">
+            <input
+              type="checkbox"
+              className="!p-0"
+              disabled={isPending}
+              checked={!!props.confirmed[inParty.partyId]?.cleared}
+              onChange={(e) => setPartyDone(inParty.partyId, e.target.checked)}
+            />
+            클리어
+          </label>
+        )}
+        {!inParty && (
           <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
             {maxSize > 1 && (
               <select
@@ -286,16 +335,61 @@ export default function CharacterMesoCard(props: Props) {
     <section className="card flex flex-col gap-3">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h2 className="text-base font-bold text-slate-900">🪙 캐릭터별 메소 · 솔로 보스</h2>
-        <span className="text-xs text-slate-500">{weekMode === "next" ? "다음주" : "이번주"} 기준</span>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-slate-500">{weekMode === "next" ? "다음주" : "이번주"} 기준</span>
+          {/* [추가] 넥슨 인게임 스케줄러로 솔로 계획·클리어 다시 불러오기 (넥슨 연동한 사람만) */}
+          {props.nexonLinked && (
+            <button
+              type="button"
+              onClick={props.onRefreshNexon}
+              disabled={props.nexonSyncing}
+              className="btn-secondary !px-3 !py-1 text-xs"
+            >
+              {props.nexonSyncing ? "불러오는 중…" : "넥슨 불러오기"} {/* [변경] 상단 ↻(최신 내용 불러오기)와 이름이 겹치지 않게 */}
+            </button>
+          )}
+        </div>
       </div>
+      {/* [추가] 도움말(? 버튼을 켰을 때만 보임) */}
+      <p className="sub help-detail">
+        캐릭터 하나는 주간 보스를 12개까지 돌 수 있고, 같은 보스는 난이도와 상관없이 1개로 세요. 파티로 가는 보스는
+        자동으로 들어가요. 솔로 계획과 클리어는 넥슨 스케줄러로 자동으로 채워져요(스케줄 페이지에 들어올 때, "넥슨 불러오기"를
+        누를 때). 예상과 다르면 여기서 직접 고치면 돼요. 오른쪽 금액은 "이번주 획득 메소 / 총 메소"예요.
+      </p>
+      {/* [추가] 마지막 넥슨 동기화 결과 -- [변경] 도움말을 켰을 때만 보임 */}
+      {props.nexonSummary.length > 0 && !props.nexonSyncing && (
+        <div className="help-detail">
+          {props.nexonSummary.map((s) => (
+            <p key={s} className="text-xs text-slate-500">
+              {s}
+            </p>
+          ))}
+        </div>
+      )}
       {rows.length > 0 && (
         <p className="text-sm text-slate-600">
-          내 캐릭터 합계 <strong className="text-orange-600">{formatMeso(sum.party + sum.solo)}</strong> (파티{" "}
-          {formatMeso(sum.party)} + 솔로 {formatMeso(sum.solo)})
+          {/* [변경] 이번주 탭: "획득 / 총" 메소 */}
+          내 캐릭터 합계{" "}
+          <strong>
+            {/* [변경] 획득/총 색 구분 (다 모으면 같은 색) */}
+            {showEarned ? (
+              <MesoProgress earned={earnedSum.weekly} total={sum.party + sum.solo} />
+            ) : (
+              <span className="text-orange-600">{formatMeso(sum.party + sum.solo)}</span>
+            )}
+          </strong>{" "}
+          (파티 {formatMeso(sum.party)} + 솔로 {formatMeso(sum.solo)})
           {sum.monthly > 0 && (
             <>
               {" "}
-              · 월간(별도) <strong className="text-purple-600">{formatMeso(sum.monthly)}</strong>
+              · 월간(별도){" "}
+              <strong>
+                {showEarned ? (
+                  <MesoProgress earned={earnedSum.monthly} total={sum.monthly} tone="purple" />
+                ) : (
+                  <span className="text-purple-600">{formatMeso(sum.monthly)}</span>
+                )}
+              </strong>
             </>
           )}
         </p>
@@ -331,7 +425,15 @@ export default function CharacterMesoCard(props: Props) {
               <span className={"text-xs " + (full ? "font-bold text-amber-600" : "text-slate-500")}>
                 보스 {cw.count}/{WEEKLY_CAP}
               </span>
-              <span className="ml-auto text-sm font-bold text-orange-600">{formatMeso(cw.partyMeso + cw.soloMeso)}</span>
+              {/* [변경] 이번주 획득 메소 / 총 메소 (다음주 탭은 총 메소만) */}
+              <span className="ml-auto text-sm font-bold">
+                {/* [변경] 획득/총 색 구분 (다 모으면 같은 색) */}
+                {showEarned ? (
+                  <MesoProgress earned={earnedOf(row).weekly} total={cw.partyMeso + cw.soloMeso} />
+                ) : (
+                  <span className="text-orange-600">{formatMeso(cw.partyMeso + cw.soloMeso)}</span>
+                )}
+              </span>
             </button>
             {isOpen && (
               <div className="px-3 pb-3">
@@ -349,7 +451,7 @@ export default function CharacterMesoCard(props: Props) {
                 </div>
                 {cw.bad.map((b) => (
                   <p key={b.it.name} className="mt-1 text-xs text-amber-600">
-                    {b.it.name} <DifficultyBadge difficulty={b.it.diff} />
+                    {displayBossName(b.it.name)} <DifficultyBadge difficulty={b.it.diff} />
                     {b.it.size > 1 ? ` (${b.it.size}인)` : ""} —{" "}
                     {b.why === "party"
                       ? "파티로 같은 보스를 가서 계산에서 빠져요"

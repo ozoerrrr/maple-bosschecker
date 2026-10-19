@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { decryptSecret } from "@/lib/crypto";
 import { lookupOuid, fetchRegisteredBossSchedule, NexonApiError } from "@/lib/nexon/client";
+import { normalizeBossName } from "@/lib/scheduling/meso";
 
 // 로그인한 본인이 /profile에서 연동해둔 넥슨 API 키로, 자기 캐릭터(본캐 +
 // 부캐 여러 개)의 "인게임 스케줄러"에 실제로 등록해둔 보스 목록(난이도
@@ -77,7 +78,7 @@ export async function GET(req: NextRequest) {
         character_name: raw.character_name,
         world_name: raw.world_name,
         bosses: registered.map((b) => ({
-          name: b.content_name,
+          name: normalizeBossName(b.content_name), // [변경] 넥슨 풀네임을 웹 보스 이름으로 맞춰서 저장 (순서·메소·인원 계산용)
           difficulty: b.difficulty,
           cycle: b.cycle,
           complete: b.complete_flag === "true",

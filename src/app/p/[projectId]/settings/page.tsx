@@ -4,6 +4,7 @@ import BossRosterEditor from "@/components/BossRosterEditor";
 import InviteCodeCard from "@/components/InviteCodeCard";
 import DeleteProjectButton from "@/components/DeleteProjectButton";
 import TransferOwnershipButton from "@/components/TransferOwnershipButton";
+import DiscordNotificationSettings from "@/components/DiscordNotificationSettings";
 
 export default async function ProjectSettingsPage({ params }: { params: { projectId: string } }) {
   const { supabase, user, project, role } = await requireProjectMember(params.projectId);
@@ -35,13 +36,22 @@ export default async function ProjectSettingsPage({ params }: { params: { projec
   const memberRows = (members ?? []) as MemberRow[];
   const memberIds = memberRows.map((m) => m.user_id);
   const { data: memberProfiles } = memberIds.length
-    ? await supabase.from("profiles").select("id, display_name, nexon_character_name").in("id", memberIds)
-    : { data: [] as { id: string; display_name: string; nexon_character_name: string | null }[] };
+    ? await supabase.from("profiles").select("id, display_name, nexon_character_name, discord_user_id").in("id", memberIds)
+    : { data: [] as { id: string; display_name: string; nexon_character_name: string | null; discord_user_id: string | null }[] };
+  // [추가] 디스코드 연결 여부 (멤버 목록의 "디코 미연동" 표시)
+  const discordLinkedById = new Map((memberProfiles ?? []).map((p) => [p.id, !!p.discord_user_id]));
+  // [추가] 디스코드 알림 설정 (0016, 그룹장만 읽기)
+  const { data: notifySettings } = await supabase
+    .from("project_notifications")
+    .select("webhook_url, notify_confirm, notify_change, notify_reset, notify_avail, avail_dow, avail_hour")
+    .eq("project_id", project.id)
+    .maybeSingle();
   const profileNameById = new Map((memberProfiles ?? []).map((p) => [p.id, p.display_name]));
   const memberList = memberRows.map((m) => ({
     id: m.user_id,
     name: profileNameById.get(m.user_id) ?? "이름없음",
     role: m.role,
+    discordLinked: discordLinkedById.get(m.user_id) ?? false, // [추가]
   }));
 
   const partyMembersByParty = new Map<string, { userId: string; characterName: string | null }[]>();
@@ -89,6 +99,8 @@ export default async function ProjectSettingsPage({ params }: { params: { projec
         candidates={candidateList}
         memberChars={memberChars} // [추가]
       />
+      {/* [추가] 디스코드 알림 설정 (그룹장 전용 화면) */}
+      <DiscordNotificationSettings projectId={project.id} initial={notifySettings ?? null} />
 
       <div className="card flex flex-col gap-3">
         <h2 className="font-semibold" style={{ color: "var(--danger)" }}>

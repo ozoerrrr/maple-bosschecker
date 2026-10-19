@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { candidateMonthlyDates, candidateSlots, candidateSlotsNext, type ScheduleSnapshot } from "@/lib/scheduling/parties";
 import type { RawBoss, RawParty } from "@/lib/scheduling/snapshot";
 import type { Day } from "@/lib/scheduling/constants";
-import { parseDateKey, weekdayLabelForDate } from "@/lib/scheduling/dates";
+import { dateSlotLabel, parseDateKey, slotLabel as shortSlotLabel, weekdayLabelForDate } from "@/lib/scheduling/dates";
 
 interface Props {
   projectId: string;
@@ -20,14 +20,13 @@ interface Props {
   onChanged: () => void;
 }
 
+// [변경] 표기는 dates.ts의 공통 함수를 쓴다: "일요일 19시" -> "일 19시"
 function slotLabel(day: Day, hour: number) {
-  return `${day}요일 ${hour}시`;
+  return shortSlotLabel(day, hour);
 }
 
 function monthlyDateLabel(dateStr: string, hour: number) {
-  const { year, month0, day } = parseDateKey(dateStr);
-  const weekday = weekdayLabelForDate(year, month0, day);
-  return `${month0 + 1}/${day} (${weekday}) ${hour}시`;
+  return dateSlotLabel(dateStr, hour); // [변경] 공통 표기 함수 사용
 }
 
 // 원본 partyStatusHtml()을 포팅: 확정 전이면 후보 시간 드롭다운 + 확정 버튼,

@@ -49,7 +49,7 @@ export default async function ProjectDashboardPage({ params }: { params: { proje
       .from("next_party_confirmations")
       .select("party_id, day, hour, parties!inner(project_id)")
       .eq("parties.project_id", projectId),
-    supabase.from("profiles").select("nexon_character_name").eq("id", user.id).single(),
+    supabase.from("profiles").select("nexon_character_name, discord_user_id").eq("id", user.id).single(),
     // 후보 등록(boss_candidates)은 이제 그룹장 전용이 아니라 멤버 누구나 자기
     // 캐릭터 몫을 올릴 수 있어서, 메인 스케줄 화면에서도 보여준다.
     supabase.from("boss_candidates").select("*").eq("project_id", projectId),
@@ -116,6 +116,7 @@ export default async function ProjectDashboardPage({ params }: { params: { proje
       confirmations={(confirmations ?? []) as any}
       nextConfirmations={(nextConfirmations ?? []) as any}
       myCharacterName={ownProfile?.nexon_character_name ?? null}
+      discordLinked={!!ownProfile?.discord_user_id} // [추가] 디스코드 연결 안내 배너용
       candidates={candidateList}
       soloPlans={(soloPlans ?? []) as any} // [추가]
       soloClears={soloClears ?? []} // [추가]

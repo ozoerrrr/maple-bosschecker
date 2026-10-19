@@ -4,7 +4,7 @@ import { useState } from "react";
 
 interface Props {
   inviteCode: string;
-  members: { id: string; name: string; role: string }[];
+  members: { id: string; name: string; role: string; discordLinked?: boolean }[]; // [추가] discordLinked
 }
 
 export default function InviteCodeCard({ inviteCode, members }: Props) {
@@ -37,6 +37,8 @@ export default function InviteCodeCard({ inviteCode, members }: Props) {
           {members.map((m) => (
             <li key={m.id} className="chip">
               {m.name} {m.role === "owner" && <span style={{ color: "var(--accent)" }}>★</span>}
+              {/* [추가] 디스코드를 연결하지 않은 멤버 표시 (디스코드 알림 멘션을 못 받음) */}
+              {m.discordLinked === false && <span className="text-[10px] font-semibold text-slate-400">디코 미연동</span>}
             </li>
           ))}
         </ul>

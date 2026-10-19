@@ -3,8 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { RawBoss, RawParty } from "@/lib/scheduling/snapshot";
 import type { ScheduleSnapshot } from "@/lib/scheduling/parties";
-import type { Difficulty } from "@/lib/scheduling/types";
-import { DIFFICULTIES, PARTY_BOSS_ORDER, formatMeso, mesoPerPerson } from "@/lib/scheduling/meso";
+import { compareBossOrder, displayBossName, formatMeso, mesoPerPerson } from "@/lib/scheduling/meso";
 import DifficultyBadge from "@/components/DifficultyBadge";
 import PartyCard from "@/components/PartyCard";
 
@@ -58,18 +57,8 @@ export default function BossList(props: Props) {
     return () => window.removeEventListener(OPEN_PARTY_EVENT, onOpenParty);
   }, [props.parties, props.currentUserId]);
 
-  // [변경] 레이드 시간표 순서(PARTY_BOSS_ORDER) -> 같은 보스는 쉬운 난이도 먼저.
-  // 표에 없는 보스는 그룹 관리의 sort_order 순서대로 맨 뒤에 붙는다.
-  const sortedBosses = useMemo(() => {
-    const idx = (n: string) => {
-      const i = PARTY_BOSS_ORDER.indexOf(n);
-      return i === -1 ? 999 : i;
-    };
-    const rank = (d: string | null) => (d ? DIFFICULTIES.indexOf(d as Difficulty) : -1);
-    return [...props.bosses].sort(
-      (a, b) => idx(a.name) - idx(b.name) || rank(a.difficulty) - rank(b.difficulty) || a.sort_order - b.sort_order
-    );
-  }, [props.bosses]);
+  // [변경] 정렬 규칙은 meso.ts의 compareBossOrder (그룹 관리 화면과 같은 순서)
+  const sortedBosses = useMemo(() => [...props.bosses].sort(compareBossOrder), [props.bosses]);
 
   const partiesByBoss = useMemo(() => {
     const m = new Map<string, RawParty[]>();
@@ -119,6 +108,12 @@ export default function BossList(props: Props) {
         </div>
       </div>
 
+      {/* [추가] 도움말(? 버튼을 켰을 때만 보임) */}
+      <p className="sub help-detail">
+        각 파티마다 파티원 전원이 비는 시간이 드롭다운에 후보로 떠요. 즉석으로 돈 경우엔 시간을 맞추지 않고 "클리어"를
+        바로 눌러도 돼요. 월간보스가 최우선이라, 월간보스 시간을 확정하면 그 주 같은 요일·시간에 한도를 넘는 주간보스
+        확정을 밀어내요. 보스 이름을 누르면 그 파티들이 펼쳐지고, 오른쪽 숫자는 "확정된 파티 / 전체 파티"예요.
+      </p>
       {visible.length === 0 ? (
         <p className="sub">
           {onlyMine
@@ -153,7 +148,7 @@ export default function BossList(props: Props) {
                 aria-expanded={isOpen}
               >
                 <span className="boss-group-title">
-                  {boss.name}
+                  {displayBossName(boss.name)} {/* [변경] 화면에는 넥슨 풀네임으로 */}
                   <DifficultyBadge difficulty={boss.difficulty} /> {/* [변경] 난이도는 배지로 */}
                   {/* [변경] "주간" 표기는 없애고, 월간 보스만 작게 표시 */}
                   {boss.period === "monthly" && <span className="boss-group-note">월간</span>}
