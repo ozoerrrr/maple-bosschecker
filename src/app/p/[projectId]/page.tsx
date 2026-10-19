@@ -110,7 +110,7 @@ export default async function ProjectDashboardPage({ params }: { params: { proje
       maxPerHour={project.max_per_hour}
       currentUserId={user.id}
       // [추가] 그룹장은 자기 그룹의 모든 파티 일정을 확정·완료·해제할 수 있다
-      isOwner={role === "owner"}
+      isOwner={role === "owner" || role === "manager"} // [변경] 0018: 부운영자도 모든 파티의 시간 확정·클리어 가능
       members={memberList}
       bosses={bosses ?? []}
       parties={thisParties} // [변경] 0017: 이번주 파티만

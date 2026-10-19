@@ -56,6 +56,8 @@ interface Props {
   members: Member[];
   candidates: Candidate[];
   memberChars: MemberChar[]; // [추가] 그룹원별 캐릭터 목록 (파티 추가·수정 폼용)
+  canHideBoss: boolean; // [변경] 0019: 보스 숨기기(파티가 있으면 삭제 포함)는 운영자만 (부운영자는 파티 편집만)
+  hiddenBosses: { name: string; difficulty: string }[]; // [추가] 0019: 이 그룹이 목록에서 숨긴 보스(난이도 없음 = "")
 }
 
 /** [추가] 그룹원 한 명의 캐릭터 하나 (settings/page.tsx에서 여러 데이터를 합쳐 만든다). */
@@ -67,7 +69,7 @@ interface MemberChar {
 // 보스/파티를 직접 CRUD하는 설정 화면. 원본의 하드코딩된 BOSS_ORDER +
 // RAW_PARTIES + "예약된 변경사항" 메커니즘을 대신한다 -- 여기서 하는 모든
 // 조작은 바로 실제 DB 행이라, 재배포나 예약 개념 자체가 필요 없다.
-export default function BossRosterEditor({ projectId, bosses, parties, nextParties, members, candidates, memberChars }: Props) {
+export default function BossRosterEditor({ projectId, bosses, parties, nextParties, members, candidates, memberChars, canHideBoss, hiddenBosses }: Props) {
   const supabase = createClient();
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -167,6 +169,13 @@ export default function BossRosterEditor({ projectId, bosses, parties, nextParti
   function openAddParty(name: string, difficulty: Difficulty | null, key = rowKey(name, difficulty)) {
     setOpened((prev) => new Set(prev).add(key));
     setEditingParty(null);
+    // [추가] 0019: 숨긴 보스를 위쪽 "파티 추가" 폼으로 고르면 다시 보이게 한다
+    if (hiddenSet.has(rowKey(name, difficulty))) {
+      startTransition(async () => {
+        await unhideBoss(name, difficulty ?? "");
+        refresh();
+      });
+    }
     const existing = bosses.find((b) => b.name === name && (b.difficulty ?? null) === difficulty);
     if (existing) {
       // [변경] 0017: 다음주 탭에서 처음 고치는 보스면 다음주 전용 파티를 먼저 만든다
@@ -242,10 +251,14 @@ export default function BossRosterEditor({ projectId, bosses, parties, nextParti
     return out.sort(compareBossOrder);
   }, [bosses]);
   // [추가] 0017: 다음주 탭에서는 월간 보스(검은 마법사)를 숨긴다 -- 월간은 주 구분 없이 이번주 탭에서 관리
-  const visibleRows =
-    week === "next"
-      ? rows.filter((r) => (r.boss?.period ?? (isMonthlyBossName(r.name) ? "monthly" : "weekly")) !== "monthly")
-      : rows;
+  // [추가] 0019: 숨긴 보스(이름+난이도)는 목록에서 뺀다
+  const hiddenSet = useMemo(
+    () => new Set(hiddenBosses.map((h) => rowKey(h.name, (h.difficulty || null) as Difficulty | null))),
+    [hiddenBosses]
+  );
+  const visibleRows = rows
+    .filter((r) => !hiddenSet.has(rowKey(r.name, r.difficulty)))
+    .filter((r) => week !== "next" || (r.boss?.period ?? (isMonthlyBossName(r.name) ? "monthly" : "weekly")) !== "monthly");
 
   // [추가] 파티 추가 폼이 열린 줄로 스크롤 (새로 만든 카드는 새로고침 뒤에 생기므로 bosses도 지켜본다)
   useEffect(() => {
@@ -253,12 +266,33 @@ export default function BossRosterEditor({ projectId, bosses, parties, nextParti
     document.getElementById(`boss-row-${addingPartyFor}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
   }, [addingPartyFor, bosses]);
 
-  function deleteBoss(id: string) {
-    if (!confirm("이 보스를 삭제할까요? 이 보스(난이도)의 파티도 모두 지워져요.")) return; // [변경] 카탈로그 보스는 목록에 "파티 0"으로 남는다
+  // [변경] 0019: "보스 삭제"를 "숨기기"로 합쳤다. 보스 카드가 있으면 카드를 지우고(이번주·다음주 파티·확정도 함께 지워짐),
+  // 이름+난이도를 hidden_bosses에 넣어 목록에서 뺀다. 파티가 있을 때만 확인 창을 띄운다.
+  function hideBoss(row: { name: string; difficulty: Difficulty | null; boss: Boss | null }) {
+    const bossId = row.boss?.id;
+    const hasParties = !!bossId && [...parties, ...nextParties].some((p) => p.boss_id === bossId);
+    if (hasParties && !confirm("숨기면 이 보스의 이번주·다음주 파티와 확정 시간이 모두 지워져요. 숨길까요?")) return;
     startTransition(async () => {
-      await supabase.from("bosses").delete().eq("id", id);
+      if (bossId) {
+        const { error } = await supabase.from("bosses").delete().eq("id", bossId);
+        if (error) {
+          alert(`보스를 지우지 못했어요: ${error.message}`);
+          return;
+        }
+      }
+      await supabase
+        .from("hidden_bosses")
+        .upsert(
+          { project_id: projectId, name: row.name, difficulty: row.difficulty ?? "" },
+          { onConflict: "project_id,name,difficulty", ignoreDuplicates: true }
+        );
       refresh();
     });
+  }
+
+  // [추가] 0019: 숨긴 보스를 다시 목록에 보이게 한다 (지워진 파티는 돌아오지 않음)
+  async function unhideBoss(name: string, difficulty: string) {
+    await supabase.from("hidden_bosses").delete().match({ project_id: projectId, name, difficulty });
   }
 
   function deleteParty(boss: Boss, id: string) {
@@ -385,6 +419,8 @@ export default function BossRosterEditor({ projectId, bosses, parties, nextParti
           const isOpen = opened.has(row.key);
           return (
             <section key={row.key} id={`boss-row-${row.key}`} className={"boss-group" + (isOpen ? " open" : "")}>
+              {/* [변경] 0018: 헤더 줄 = 펼치기 버튼 + 오른쪽 "보스 삭제" (버튼 안에 버튼을 넣을 수 없어 나란히 둔다) */}
+              <div className="boss-group-headrow">
               <button type="button" className="boss-group-head" onClick={() => toggleRow(row.key)} aria-expanded={isOpen}>
                 <span className="boss-group-title">
                   {displayBossName(row.name)} {/* 화면에는 넥슨 풀네임으로 */}
@@ -403,6 +439,13 @@ export default function BossRosterEditor({ projectId, bosses, parties, nextParti
                   ▸
                 </span>
               </button>
+              {/* [변경] 0019: 펼치지 않아도 바로 보이는 "숨기기" (보스 삭제를 합침, 모든 줄, 이번주·다음주 탭 모두, 운영자만) */}
+              {canHideBoss && (
+                <button type="button" disabled={isPending} onClick={() => hideBoss(row)} className="boss-group-del">
+                  숨기기
+                </button>
+              )}
+              </div>
               <div className="boss-group-body" hidden={!isOpen}>
                 {bossParties.map((p, i) => (
                   <Fragment key={p.id}>
@@ -490,12 +533,7 @@ export default function BossRosterEditor({ projectId, bosses, parties, nextParti
                       + 파티 추가
                     </button>
                     {/* [변경] 삭제는 DB에 카드가 있는 줄에만. 카탈로그 보스는 지워도 목록에 "파티 0"으로 남는다 */}
-                    {/* [변경] 0017: 보스 삭제는 두 주 모두에 적용되므로 이번주 탭에서만. 다음주 탭에는 "이번주와 같게 되돌리기" */}
-                    {boss && week === "this" && (
-                      <button onClick={() => deleteBoss(boss.id)} className="text-xs text-red-500 underline">
-                        보스 삭제 {/* [변경] 파티 줄의 "삭제"와 헷갈리지 않게 */}
-                      </button>
-                    )}
+                    {/* [변경] 0018: 보스 삭제는 줄 헤더 쪽으로 옮김. 다음주 탭에는 "이번주와 같게 되돌리기" */}
                     {boss && week === "next" && boss.next_custom && (
                       <button disabled={isPending} onClick={() => resetNext(boss)} className="text-xs text-slate-500 underline">
                         이번주와 같게 되돌리기
@@ -507,6 +545,40 @@ export default function BossRosterEditor({ projectId, bosses, parties, nextParti
             </section>
           );
         })}
+        {/* [추가] 0019: 숨긴 보스 목록 -- "다시 보이기"로 꺼낸다 (운영자만) */}
+        {canHideBoss && hiddenBosses.length > 0 && (
+          <details className="text-sm">
+            <summary className="cursor-pointer text-slate-500">숨긴 보스 {hiddenBosses.length}개 보기</summary>
+            <div className="flex flex-wrap gap-2 pt-2">
+              {[...hiddenBosses]
+                .sort((a, b) =>
+                  compareBossOrder(
+                    { name: a.name, difficulty: (a.difficulty || null) as Difficulty | null, sort_order: 0 },
+                    { name: b.name, difficulty: (b.difficulty || null) as Difficulty | null, sort_order: 0 }
+                  )
+                )
+                .map((h) => (
+                  <span key={`${h.name}|${h.difficulty}`} className="chip">
+                    {displayBossName(h.name)}
+                    <DifficultyBadge difficulty={(h.difficulty || null) as Difficulty | null} />
+                    <button
+                      type="button"
+                      disabled={isPending}
+                      onClick={() =>
+                        startTransition(async () => {
+                          await unhideBoss(h.name, h.difficulty);
+                          refresh();
+                        })
+                      }
+                      className="text-xs text-slate-500 underline"
+                    >
+                      다시 보이기
+                    </button>
+                  </span>
+                ))}
+            </div>
+          </details>
+        )}
       </section>
     </div>
   );

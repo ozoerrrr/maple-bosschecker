@@ -47,7 +47,7 @@ export type Database = {
         Row: {
           project_id: string;
           user_id: string;
-          role: "owner" | "member";
+          role: "owner" | "manager" | "member"; // [변경] 0018: 부운영자(manager) 추가
           color: string | null;
           joined_at: string;
         };
@@ -162,6 +162,13 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["solo_clears"]["Row"]>;
         Relationships: NoRelationships;
       };
+      // [추가] 0019 그룹 관리 보스 목록에서 숨긴 보스 (이름+난이도, 난이도 없음 = "")
+      hidden_bosses: {
+        Row: { project_id: string; name: string; difficulty: string; created_at: string };
+        Insert: { project_id: string; name: string; difficulty?: string };
+        Update: Partial<Database["public"]["Tables"]["hidden_bosses"]["Row"]>;
+        Relationships: NoRelationships;
+      };
       // [추가] 0016 그룹별 디스코드 알림 설정 (그룹장만 읽기·쓰기)
       project_notifications: {
         Row: {
@@ -230,6 +237,9 @@ export type Database = {
       // [추가] 0017 다음주 파티: 다음주 전용 파티 만들기({이번주 id: 다음주 id}) / 이번주와 같게 되돌리기
       make_next_roster: { Args: { p_boss_id: string }; Returns: Record<string, string> };
       reset_next_roster: { Args: { p_boss_id: string }; Returns: undefined };
+      // [추가] 0018 직책: 운영자가 멤버 <-> 부운영자 지정 / 운영자·부운영자인지
+      set_member_role: { Args: { p_project_id: string; p_user_id: string; p_role: "manager" | "member" }; Returns: undefined };
+      is_project_manager: { Args: { p_project_id: string }; Returns: boolean };
     };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;

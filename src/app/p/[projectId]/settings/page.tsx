@@ -9,7 +9,9 @@ import DiscordNotificationSettings from "@/components/DiscordNotificationSetting
 
 export default async function ProjectSettingsPage({ params }: { params: { projectId: string } }) {
   const { supabase, user, project, role } = await requireProjectMember(params.projectId);
-  if (role !== "owner") redirect(`/p/${params.projectId}`);
+  // [변경] 0018: 운영자와 부운영자가 들어올 수 있다. 부운영자에게는 보스 목록(파티 편집)만 보인다.
+  if (role !== "owner" && role !== "manager") redirect(`/p/${params.projectId}`);
+  const isOwner = role === "owner";
 
   const [
     { data: bosses },
@@ -18,6 +20,7 @@ export default async function ProjectSettingsPage({ params }: { params: { projec
     { data: members },
     { data: bossCandidates },
     { data: extraChars },
+    { data: hiddenBosses },
   ] = await Promise.all([
     supabase.from("bosses").select("*").eq("project_id", project.id).order("sort_order"),
     supabase.from("parties").select("*").eq("project_id", project.id).order("sort_order"),
@@ -31,6 +34,8 @@ export default async function ProjectSettingsPage({ params }: { params: { projec
     supabase.from("boss_candidates").select("*").eq("project_id", project.id),
     // [추가] 파티 추가·수정 폼의 캐릭터 목록용: 캐릭터별 메소 카드에서 직접 추가한 캐릭터 (0011)
     supabase.from("extra_characters").select("user_id, character_name").eq("project_id", project.id),
+    // [추가] 0019: 보스 목록에서 숨긴 보스
+    supabase.from("hidden_bosses").select("name, difficulty").eq("project_id", project.id),
   ]);
 
   type MemberRow = { user_id: string; role: string };
@@ -41,7 +46,7 @@ export default async function ProjectSettingsPage({ params }: { params: { projec
     : { data: [] as { id: string; display_name: string; nexon_character_name: string | null; discord_user_id: string | null }[] };
   // [추가] 디스코드 연결 여부 (멤버 목록의 "디코 미연동" 표시)
   const discordLinkedById = new Map((memberProfiles ?? []).map((p) => [p.id, !!p.discord_user_id]));
-  // [추가] 디스코드 알림 설정 (0016, 그룹장만 읽기)
+  // [추가] 디스코드 알림 설정 (0016, 운영자만 읽기 -- 부운영자는 RLS로 빈 값)
   const { data: notifySettings } = await supabase
     .from("project_notifications")
     .select("webhook_url, notify_confirm, notify_change, notify_reset, notify_avail, avail_dow, avail_hour")
@@ -93,8 +98,11 @@ export default async function ProjectSettingsPage({ params }: { params: { projec
 
   return (
     <div className="flex flex-col gap-4">
-      <InviteCodeCard inviteCode={project.invite_code} members={memberList} />
+      {/* [변경] 0018: 초대 코드·멤버(직책 지정)는 운영자만 */}
+      {isOwner && <InviteCodeCard projectId={project.id} inviteCode={project.invite_code} members={memberList} />}
       <BossRosterEditor
+        canHideBoss={isOwner} // [변경] 0019: 보스 숨기기(보스 삭제 포함)는 운영자만
+        hiddenBosses={hiddenBosses ?? []} // [추가] 0019
         projectId={project.id}
         bosses={bosses ?? []}
         parties={thisParties} // [변경] 0017: 이번주 파티
@@ -103,9 +111,10 @@ export default async function ProjectSettingsPage({ params }: { params: { projec
         candidates={candidateList}
         memberChars={memberChars} // [추가]
       />
-      {/* [추가] 디스코드 알림 설정 (그룹장 전용 화면) */}
-      <DiscordNotificationSettings projectId={project.id} initial={notifySettings ?? null} />
+      {/* [추가] 디스코드 알림 설정 -- [변경] 0018: 운영자만 */}
+      {isOwner && <DiscordNotificationSettings projectId={project.id} initial={notifySettings ?? null} />}
 
+      {isOwner && ( // [변경] 0018: 위험 구역(그룹 삭제·운영자 양도)은 운영자만
       <div className="card flex flex-col gap-3">
         <h2 className="font-semibold" style={{ color: "var(--danger)" }}>
           위험 구역
@@ -119,6 +128,7 @@ export default async function ProjectSettingsPage({ params }: { params: { projec
           />
         </div>
       </div>
+      )}
     </div>
   );
 }

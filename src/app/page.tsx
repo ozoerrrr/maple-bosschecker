@@ -87,6 +87,7 @@ export default async function HomePage() {
           <div className="grid gap-3 sm:grid-cols-2">
             {projects.map((p) => {
               const isOwner = p.role === "owner";
+              const isManager = p.role === "manager"; // [추가] 0018 부운영자
               return (
                 <Link
                   key={p.id}
@@ -101,10 +102,12 @@ export default async function HomePage() {
                       className={`text-[11px] font-bold px-2 py-0.5 rounded-md ${
                         isOwner
                           ? "bg-orange-50 text-orange-600 border border-orange-200"
+                          : isManager
+                          ? "bg-sky-50 text-sky-600 border border-sky-200"
                           : "bg-slate-100 text-slate-600 border border-slate-200"
                       }`}
                     >
-                      {isOwner ? "👑 운영자" : "멤버"}
+                      {isOwner ? "👑 운영자" : isManager ? "부운영자" : "멤버"}
                     </span>
                   </div>
 

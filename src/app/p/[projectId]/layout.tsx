@@ -30,7 +30,8 @@ export default async function ProjectLayout({
           <Link href={`/p/${project.id}`} className="btn-secondary">
             스케줄
           </Link>
-          {role === "owner" && (
+          {/* [변경] 0018: 부운영자도 그룹 관리(보스 목록)에 들어갈 수 있다 */}
+          {(role === "owner" || role === "manager") && (
             <Link href={`/p/${project.id}/settings`} className="btn-secondary">
               그룹 관리
             </Link>
