@@ -6,8 +6,9 @@ import { createClient } from "@/lib/supabase/client";
 import { displayBossName, normalizeNexonDifficulty } from "@/lib/scheduling/meso";
 import DifficultyBadge from "@/components/DifficultyBadge";
 import type { RawBoss, RawParty } from "@/lib/scheduling/snapshot";
-import { isMonthlyBossName, plansFromScheduler, soloPeriodKey, type SoloPlanRow } from "@/lib/scheduling/solo";
-import { setPartyCleared } from "@/lib/scheduling/partyClear";
+import type { SoloPlanRow } from "@/lib/scheduling/solo";
+import { markSynced, syncFromScheduler, type SchedulerCharacterResult } from "@/lib/nexon/syncScheduler";
+import { markLocalChange } from "@/components/LiveRefreshButton";
 import type { ConfirmationMap } from "@/lib/scheduling/types";
 
 interface FetchedBoss {
@@ -16,13 +17,6 @@ interface FetchedBoss {
   cycle: string;
   complete: boolean;
   characterName: string;
-}
-
-interface CharacterResult {
-  character_name: string;
-  world_name: string | null;
-  bosses: Omit<FetchedBoss, "characterName">[];
-  error?: string;
 }
 
 /** 이미 후보 풀(boss_candidates)에 등록돼 있는 (보스이름, 난이도, 캐릭터이름). */
@@ -118,95 +112,29 @@ export default function ImportBossesFromNexon({
     setLoading(true);
     setError(null);
     setFetched(false);
-    const res = await fetch(`/api/nexon/boss-schedule?names=${encodeURIComponent(characterNames.join(","))}`);
-    const data = await res.json();
+    // [변경] 조회·내 캐릭터 저장·솔로 계획 덮어쓰기·인게임 클리어 반영은 공통 함수(syncFromScheduler)가 한다.
+    // 스케줄 페이지 진입 시 자동 동기화, 메소 카드의 "새로고침"도 같은 함수를 쓴다.
+    markLocalChange(30000); // [추가] 내 저장으로 생기는 변경은 레드닷을 켜지 않게
+    const sync = await syncFromScheduler(characterNames, {
+      supabase,
+      projectId,
+      userId: currentUserId,
+      bosses: groupBosses,
+      parties,
+      soloPlans,
+      confirmed,
+    });
     setLoading(false);
-    if (!res.ok) {
-      setError(data.error ?? "불러오기에 실패했어요.");
+    if (sync.error) {
+      setError(sync.error);
       return;
     }
+    markSynced(projectId, currentUserId); // 방금 동기화했으니 10분 동안은 자동 동기화를 건너뛴다
     setFetched(true);
-
-    const results: CharacterResult[] = data.results ?? [];
-    const failed = results.filter((r) => r.error).map((r) => ({ characterName: r.character_name, error: r.error! }));
-    setCharErrors(failed);
-
-    // [추가] 조회에 성공한 캐릭터를 내 캐릭터 목록(extra_characters)에 저장한다.
-    // 이미 있으면 무시한다. 보스를 하나도 등록하지 않은 부캐도 다음에 다시 보이게 하려는 것.
-    const okNames = results.filter((r) => !r.error).map((r) => r.character_name);
-    if (okNames.length > 0) {
-      await supabase.from("extra_characters").upsert(
-        okNames.map((n) => ({ project_id: projectId, user_id: currentUserId, character_name: n })),
-        { onConflict: "project_id,user_id,character_name", ignoreDuplicates: true }
-      );
-      router.refresh(); // [추가] 저장한 부캐가 메소 카드에 바로 나오게 새로고침
-    }
-
-    // [추가] 인게임 스케줄러로 "캐릭터별 메소 · 솔로 보스"의 이번주 솔로 계획을 덮어쓴다.
-    // 파티 보스는 빼고(파티 우선), 나머지 스케줄러 보스를 그 난이도로 넣는다. 다음주 계획은 건드리지 않는다.
-    // 덮어쓴 뒤에도 메소 카드에서 직접 고칠 수 있다.
-    const bossById = new Map(groupBosses.map((b) => [b.id, b]));
-    const summary: string[] = [];
-    for (const r of results) {
-      if (r.error) continue;
-      const { plans, partySkipped, noMeso } = plansFromScheduler(
-        currentUserId,
-        r.character_name,
-        r.bosses.map((b) => ({ name: b.name, difficulty: normalizeNexonDifficulty(b.difficulty), complete: b.complete })),
-        parties,
-        bossById,
-        soloPlans
-      );
-      await supabase
-        .from("solo_plans")
-        .delete()
-        .match({ project_id: projectId, user_id: currentUserId, character_name: r.character_name, week: "this" });
-      if (plans.length > 0) {
-        await supabase.from("solo_plans").insert(
-          plans.map((pl) => ({
-            project_id: projectId,
-            user_id: currentUserId,
-            character_name: r.character_name,
-            week: "this" as const,
-            boss_name: pl.boss_name,
-            difficulty: pl.difficulty,
-            party_size: pl.party_size,
-          }))
-        );
-      }
-      // [추가] 인게임 이번주 완료 여부(complete_flag)가 우선: 솔로 보스 클리어는 스케줄러대로 덮어쓰고,
-      // 파티 보스가 완료면 그 파티를 클리어로 바꾼다(파티원이 따로 누르지 않아도 됨).
-      // 파티 보스가 미완료여도 파티 클리어는 해제하지 않는다 -- 다른 파티원의 인게임 완료/클릭을 지우지 않기 위해.
-      let clearedCount = 0;
-      for (const pl of plans) {
-        const key = {
-          project_id: projectId,
-          user_id: currentUserId,
-          character_name: r.character_name,
-          boss_name: pl.boss_name,
-          period_key: soloPeriodKey(isMonthlyBossName(pl.boss_name)),
-        };
-        if (pl.complete) {
-          await supabase.from("solo_clears").upsert(key);
-          clearedCount++;
-        } else {
-          await supabase.from("solo_clears").delete().match(key);
-        }
-      }
-      for (const ps of partySkipped) {
-        if (!ps.complete) continue;
-        await setPartyCleared(supabase, ps.partyId, confirmed[ps.partyId], true, currentUserId);
-        clearedCount++;
-      }
-      summary.push(
-        `${r.character_name}: 솔로 ${plans.length}개` +
-          (partySkipped.length ? ` (파티 ${partySkipped.length}개 제외)` : "") +
-          ` · 클리어 ${clearedCount}개` + // [추가] 인게임 완료로 체크된 수 (솔로 + 파티)
-          (noMeso.length ? ` · 메소표에 없어 제외: ${noMeso.map((n) => displayBossName(n.name)).join(", ")}` : "")
-      );
-    }
-    setSoloSummary(summary);
-    if (summary.length > 0) router.refresh();
+    const results: SchedulerCharacterResult[] = sync.results;
+    setCharErrors(sync.charErrors);
+    setSoloSummary(sync.summary);
+    router.refresh(); // 저장한 부캐·솔로 계획·클리어가 메소 카드에 바로 나오게
 
     const allBosses: FetchedBoss[] = results.flatMap((r) =>
       r.error ? [] : r.bosses.map((b) => ({ ...b, characterName: r.character_name }))
@@ -277,6 +205,7 @@ export default function ImportBossesFromNexon({
 
     setSaving(false);
     setOpen(false);
+    markLocalChange(); // [추가]
     router.refresh();
   }
 
@@ -285,7 +214,7 @@ export default function ImportBossesFromNexon({
       <div className="flex items-center justify-between">
         <div>
           <h2 className="font-semibold">넥슨 스케줄러에서 보스 불러오기</h2>
-          <p className="label">
+          <p className="label help-detail"> {/* [변경] 긴 안내는 도움말을 켰을 때만 */}
             넥슨 스케줄러 등록 정보는 비공개라서, <b>프로필에 연동해둔 내 넥슨 API 키로 내 캐릭터(본캐+부캐)만</b>{" "}
             불러올 수 있어요 — 다른 사람 캐릭터는 그 사람이 직접 연동해서 불러와야 해요. 불러오면 인게임 스케줄러대로
             "캐릭터별 메소 · 솔로 보스"의 이번주 솔로 계획이 채워지고(파티 보스는 제외, 이후 직접 수정 가능), 그룹에 있는

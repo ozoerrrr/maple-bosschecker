@@ -18,6 +18,8 @@ export type Database = {
           nexon_world_name: string | null;
           nexon_linked_at: string | null;
           nexon_api_key_enc: string | null;
+          discord_user_id: string | null; // [추가] 0016 디스코드 멘션용
+          discord_username: string | null; // [추가] 0016
           created_at: string;
         };
         Insert: Partial<Database["public"]["Tables"]["profiles"]["Row"]> & { id: string };
@@ -156,6 +158,25 @@ export type Database = {
         Row: { project_id: string; user_id: string; character_name: string; boss_name: string; period_key: string };
         Insert: { project_id: string; user_id: string; character_name: string; boss_name: string; period_key: string };
         Update: Partial<Database["public"]["Tables"]["solo_clears"]["Row"]>;
+        Relationships: NoRelationships;
+      };
+      // [추가] 0016 그룹별 디스코드 알림 설정 (그룹장만 읽기·쓰기)
+      project_notifications: {
+        Row: {
+          project_id: string;
+          webhook_url: string | null;
+          notify_confirm: boolean;
+          notify_change: boolean;
+          notify_reset: boolean;
+          notify_avail: boolean;
+          avail_dow: number;
+          avail_hour: number;
+          last_reset_week: string | null;
+          last_avail_week: string | null;
+          updated_at: string;
+        };
+        Insert: Partial<Database["public"]["Tables"]["project_notifications"]["Row"]> & { project_id: string };
+        Update: Partial<Database["public"]["Tables"]["project_notifications"]["Row"]>;
         Relationships: NoRelationships;
       };
       // [추가] 0011 직접 추가한 캐릭터

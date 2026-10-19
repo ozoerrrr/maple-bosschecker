@@ -108,6 +108,12 @@ export default function BossList(props: Props) {
         </div>
       </div>
 
+      {/* [추가] 도움말(? 버튼을 켰을 때만 보임) */}
+      <p className="sub help-detail">
+        각 파티마다 파티원 전원이 비는 시간이 드롭다운에 후보로 떠요. 즉석으로 돈 경우엔 시간을 맞추지 않고 "클리어"를
+        바로 눌러도 돼요. 월간보스가 최우선이라, 월간보스 시간을 확정하면 그 주 같은 요일·시간에 한도를 넘는 주간보스
+        확정을 밀어내요. 보스 이름을 누르면 그 파티들이 펼쳐지고, 오른쪽 숫자는 "확정된 파티 / 전체 파티"예요.
+      </p>
       {visible.length === 0 ? (
         <p className="sub">
           {onlyMine
