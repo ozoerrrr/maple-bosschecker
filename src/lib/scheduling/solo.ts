@@ -26,7 +26,7 @@ export function partyMaxOf(boss: string): number {
 }
 
 /** 메소 카드에서 공팟 인원수를 고를 수 있는 보스 (나머지는 솔로만). 최대 인원은 partyMaxOf를 따른다. */
-const GONGPAT_BOSSES = ["칼로스", "세렌", "대적자", "벨로나", "스우", "흉성", "림보", "발드릭스"];
+const GONGPAT_BOSSES = ["칼로스", "세렌", "대적자", "카링", "벨로나", "스우", "흉성", "림보", "발드릭스"]; // [변경] 카링 추가 (최대 6인)
 export const SOLO_MAX: Record<string, number> = Object.fromEntries(
   GONGPAT_BOSSES.map((b) => [b, partyMaxOf(b)])
 );
@@ -225,4 +225,52 @@ export function soloPeriodKey(monthly: boolean, ref: Date = new Date()): string 
   if (monthly) return "m" + todayDateStr().slice(0, 7);
   const s = startOfThisWeek(ref);
   return "w" + ymdKey(s.getFullYear(), s.getMonth(), s.getDate());
+}
+
+// [추가] 인게임 스케줄러 -> 이번주 솔로 계획 (넥슨 불러오기에서 사용, 스케줄러가 기존 계획을 덮어쓴다).
+// 규칙: 1) 이 캐릭터가 파티원으로 들어간 보스(난이도 무관)는 빼고 -- 메소 카드가 "파티로 진행 중"으로 센다
+//       2) 나머지 스케줄러 보스를 그 난이도로 솔로 계획에 넣는다
+//       3) 메소표에 없는 보스·난이도(핑크빈, 노말 스우 등)는 뺀다
+//       4) 공팟 인원은 기존 계획에 같은 보스가 있으면 유지, 없으면 1(솔로)
+// 12개 한도 초과는 여기서 자르지 않는다 (메소 카드가 듄켈 -> 데미안 -> 루시드 순으로 빼고 경고).
+export function plansFromScheduler(
+  uid: string,
+  ch: string,
+  scheduler: { name: string; difficulty: Difficulty | null; complete?: boolean }[],
+  parties: RawParty[],
+  bossById: Map<string, RawBoss>,
+  prevPlans: SoloPlanRow[]
+): {
+  plans: { boss_name: string; difficulty: Difficulty; party_size: number; complete: boolean }[];
+  partySkipped: { name: string; partyId: string; complete: boolean }[]; // [변경] 파티 클리어 반영용으로 파티 id·완료 여부 포함
+  noMeso: { name: string; difficulty: Difficulty | null }[];
+} {
+  const partyBosses = new Map<string, string>(); // 보스 이름 -> 파티 id
+  for (const p of parties) {
+    if (!p.members.some((m) => m.userId === uid && m.characterName === ch)) continue;
+    const boss = bossById.get(p.boss_id);
+    if (boss && !partyBosses.has(boss.name)) partyBosses.set(boss.name, p.id);
+  }
+  const plans: { boss_name: string; difficulty: Difficulty; party_size: number; complete: boolean }[] = [];
+  const partySkipped: { name: string; partyId: string; complete: boolean }[] = [];
+  const noMeso: { name: string; difficulty: Difficulty | null }[] = [];
+  const seen = new Set<string>();
+  for (const s of scheduler) {
+    if (seen.has(s.name)) continue; // 같은 보스는 한 번만 (난이도와 상관없이 1개로 센다)
+    seen.add(s.name);
+    const partyId = partyBosses.get(s.name);
+    if (partyId) {
+      partySkipped.push({ name: s.name, partyId, complete: !!s.complete });
+      continue;
+    }
+    if (!s.difficulty || typeof MESO_TABLE[s.name]?.[s.difficulty] !== "number") {
+      noMeso.push(s);
+      continue;
+    }
+    const prev = prevPlans.find(
+      (r) => r.user_id === uid && r.character_name === ch && r.week === "this" && r.boss_name === s.name
+    );
+    plans.push({ boss_name: s.name, difficulty: s.difficulty, party_size: clampSize(s.name, prev?.party_size), complete: !!s.complete });
+  }
+  return { plans, partySkipped, noMeso };
 }

@@ -218,6 +218,10 @@ export default function ScheduleBoard(props: Props) {
         myCharacterName={props.myCharacterName}
         currentUserId={props.currentUserId}
         savedCharacterNames={mySavedCharNames} // [추가]
+        bosses={props.bosses} // [추가] 후보는 그룹에 있는 보스에만
+        parties={props.parties} // [추가] 메소 카드 자동 채우기: 파티 보스 우선
+        soloPlans={props.soloPlans} // [추가] 기존 공팟 인원 유지
+        confirmed={snapshot.confirmed} // [추가] 인게임 완료 -> 파티 클리어 반영
       />
 
       {/* 3. 내 상태 및 가능 시간 설정 퀵 바 (팝업 트리거) */}
@@ -336,6 +340,7 @@ export default function ScheduleBoard(props: Props) {
         soloClears={props.soloClears}
         extraChars={props.extraChars}
         candidates={props.candidates} // [추가]
+        confirmed={snapshot.confirmed} // [추가] 파티 보스 클리어 체크 = 파티 클리어 상태
         onChanged={refresh}
       />
 

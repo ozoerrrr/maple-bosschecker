@@ -3,8 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { RawBoss, RawParty } from "@/lib/scheduling/snapshot";
 import type { ScheduleSnapshot } from "@/lib/scheduling/parties";
-import type { Difficulty } from "@/lib/scheduling/types";
-import { DIFFICULTIES, PARTY_BOSS_ORDER, formatMeso, mesoPerPerson } from "@/lib/scheduling/meso";
+import { compareBossOrder, displayBossName, formatMeso, mesoPerPerson } from "@/lib/scheduling/meso";
 import DifficultyBadge from "@/components/DifficultyBadge";
 import PartyCard from "@/components/PartyCard";
 
@@ -58,18 +57,8 @@ export default function BossList(props: Props) {
     return () => window.removeEventListener(OPEN_PARTY_EVENT, onOpenParty);
   }, [props.parties, props.currentUserId]);
 
-  // [변경] 레이드 시간표 순서(PARTY_BOSS_ORDER) -> 같은 보스는 쉬운 난이도 먼저.
-  // 표에 없는 보스는 그룹 관리의 sort_order 순서대로 맨 뒤에 붙는다.
-  const sortedBosses = useMemo(() => {
-    const idx = (n: string) => {
-      const i = PARTY_BOSS_ORDER.indexOf(n);
-      return i === -1 ? 999 : i;
-    };
-    const rank = (d: string | null) => (d ? DIFFICULTIES.indexOf(d as Difficulty) : -1);
-    return [...props.bosses].sort(
-      (a, b) => idx(a.name) - idx(b.name) || rank(a.difficulty) - rank(b.difficulty) || a.sort_order - b.sort_order
-    );
-  }, [props.bosses]);
+  // [변경] 정렬 규칙은 meso.ts의 compareBossOrder (그룹 관리 화면과 같은 순서)
+  const sortedBosses = useMemo(() => [...props.bosses].sort(compareBossOrder), [props.bosses]);
 
   const partiesByBoss = useMemo(() => {
     const m = new Map<string, RawParty[]>();
@@ -153,7 +142,7 @@ export default function BossList(props: Props) {
                 aria-expanded={isOpen}
               >
                 <span className="boss-group-title">
-                  {boss.name}
+                  {displayBossName(boss.name)} {/* [변경] 화면에는 넥슨 풀네임으로 */}
                   <DifficultyBadge difficulty={boss.difficulty} /> {/* [변경] 난이도는 배지로 */}
                   {/* [변경] "주간" 표기는 없애고, 월간 보스만 작게 표시 */}
                   {boss.period === "monthly" && <span className="boss-group-note">월간</span>}

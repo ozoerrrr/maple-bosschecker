@@ -93,3 +93,15 @@ export function weekdayDateNextWeek(day: Day, ref: Date = new Date()): string {
 export function isDayPastThisWeek(day: Day, ref: Date = new Date()): boolean {
   return weekdayDateThisWeek(day, ref) < todayDateStr();
 }
+
+// [추가] 요일 확정 시간 표기: ("목", 21) -> "목 21시". 표기 규칙을 바꾸려면 이 함수만 고친다 (레이드 시간표 slotLabel)
+export function slotLabel(day: Day, hour: number): string {
+  return `${day} ${hour}시`;
+}
+
+// [추가] 날짜 확정 시간 표기(월간보스): ("2026-10-03", 21) -> "10/3 (토) 21시".
+// sep에 "\n"을 넣으면 날짜와 시간을 두 줄로 나눈다 (whitespace-pre-line과 함께 사용)
+export function dateSlotLabel(dateStr: string, hour: number, sep = " "): string {
+  const { year, month0, day } = parseDateKey(dateStr);
+  return `${month0 + 1}/${day} (${weekdayLabelForDate(year, month0, day)})${sep}${hour}시`;
+}

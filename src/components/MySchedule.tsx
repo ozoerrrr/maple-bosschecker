@@ -4,7 +4,8 @@ import { useMemo, useState } from "react";
 import { DAY_INDEX, type Day } from "@/lib/scheduling/constants";
 import DifficultyBadge from "@/components/DifficultyBadge";
 import { OPEN_PARTY_EVENT } from "@/components/BossList"; // [추가]
-import { parseDateKey, weekdayLabelForDate } from "@/lib/scheduling/dates";
+import { dateSlotLabel, slotLabel } from "@/lib/scheduling/dates";
+import { displayBossName } from "@/lib/scheduling/meso";
 import type { RawBoss, RawConfirmationRow, RawNextConfirmationRow, RawParty } from "@/lib/scheduling/snapshot";
 
 interface Props {
@@ -49,13 +50,12 @@ export default function MySchedule({ currentUserId: me, bosses, parties, confirm
       if (c?.cleared) continue;
       const bossOrder = String(boss.sort_order).padStart(4, "0");
       if (boss.period === "monthly" && c?.confirmed_date && c.hour != null) {
-        const { year, month0, day } = parseDateKey(c.confirmed_date);
         out.push({
           party: p,
           boss,
           kind: "monthly",
           sortKey: `${c.confirmed_date}-${String(c.hour).padStart(2, "0")}`,
-          when: `${month0 + 1}/${day} (${weekdayLabelForDate(year, month0, day)}) ${c.hour}시`,
+          when: dateSlotLabel(c.confirmed_date, c.hour, "\n"), // [변경] 10/3 (토) ⏎ 21시 (레이드 시간표와 같은 두 줄)
         });
       } else if (boss.period === "weekly" && c?.day && c.hour != null) {
         out.push({
@@ -63,7 +63,7 @@ export default function MySchedule({ currentUserId: me, bosses, parties, confirm
           boss,
           kind: "weekly",
           sortKey: `${DAY_INDEX[c.day as Day]}-${String(c.hour).padStart(2, "0")}`,
-          when: `${c.day} ${c.hour}시`,
+          when: slotLabel(c.day as Day, c.hour), // [변경] 공통 표기 함수
         });
       } else {
         out.push({ party: p, boss, kind: "pending", sortKey: bossOrder, when: "미확정" });
@@ -75,7 +75,7 @@ export default function MySchedule({ currentUserId: me, bosses, parties, confirm
           boss,
           kind: "next",
           sortKey: `${DAY_INDEX[n.day as Day]}-${String(n.hour).padStart(2, "0")}`,
-          when: `다음주 ${n.day} ${n.hour}시`,
+          when: `다음주\n${slotLabel(n.day as Day, n.hour)}`, // [변경] 다음주 ⏎ 목 21시
         });
       }
     }
@@ -171,10 +171,10 @@ export default function MySchedule({ currentUserId: me, bosses, parties, confirm
                   onClick={() => goToParty(it.party.id)}
                   className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2 text-left transition hover:border-orange-300"
                 >
-                  <span className={"w-28 shrink-0 text-sm font-bold " + kindStyle[it.kind]}>{it.when}</span>
+                  <span className={"w-28 shrink-0 whitespace-pre-line text-sm font-bold leading-tight " + kindStyle[it.kind]}>{it.when}</span>
                   <span className="min-w-0 flex-1">
                     <span className="text-sm font-semibold text-slate-800">
-                      {it.boss.name}
+                      {displayBossName(it.boss.name)} {/* [변경] 화면에는 넥슨 풀네임으로 */}
                       <DifficultyBadge difficulty={it.boss.difficulty} className="ml-1.5" />
                     </span>
                     <span className="block truncate text-xs text-slate-500">

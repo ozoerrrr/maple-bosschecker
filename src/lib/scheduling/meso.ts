@@ -57,11 +57,48 @@ export const BOSS_CATALOG: { name: string; period: "weekly" | "monthly" }[] = [
   { name: "검은 마법사", period: "monthly" }, // [변경] 띄어쓰기
 ];
 
-// [추가] 보스 목록(시간 확정) 표시 순서 -- 레이드 시간표의 BOSSES 표 순서.
-// 여기 없는 보스는 그룹 관리의 sort_order 순서대로 맨 뒤에 붙는다.
-export const PARTY_BOSS_ORDER = [
-  "검은 마법사", "스우", "세렌", "칼로스", "대적자", "카링", "흉성", "벨로나", "림보", "발드릭스",
-];
+// [추가] 넥슨 풀네임 -> 웹 보스 이름(짧은 이름). "선택받은 세렌" -> "세렌", "감시자 칼로스" -> "칼로스".
+// 카탈로그 이름과 같으면 그대로, 아니면 " 카탈로그이름"으로 끝나는지 본다(여러 개면 가장 긴 이름).
+// 카탈로그에 없는 보스(핑크빈 등)는 그대로 둔다. 저장·계산(순서, 메소표, 파티 최대 인원)은 모두 이 짧은 이름 기준이다.
+export function normalizeBossName(raw: string): string {
+  const name = raw.trim();
+  if (BOSS_CATALOG.some((b) => b.name === name)) return name;
+  const match = BOSS_CATALOG.map((b) => b.name)
+    .filter((n) => name.endsWith(" " + n))
+    .sort((a, b) => b.length - a.length)[0];
+  return match ?? name;
+}
+
+// [추가] 화면 표시용 풀네임 (넥슨 표기). 저장·계산은 짧은 이름이고, 화면에 보여줄 때만 이 표를 거친다.
+// 표에 없는 보스는 짧은 이름 그대로 보인다. 새 풀네임이 확인되면 여기 한 줄만 추가한다.
+export const BOSS_DISPLAY_NAME: Record<string, string> = {
+  "세렌": "선택받은 세렌",
+  "칼로스": "감시자 칼로스",
+  "대적자": "최초의 대적자",
+  "흉성": "찬란한 흉성",
+};
+
+export function displayBossName(name: string): string {
+  return BOSS_DISPLAY_NAME[name] ?? name;
+}
+
+// [변경] 보스 표시 순서 = BOSS_CATALOG 배열 순서 (레이드 시간표의 사용자 지정 SOLO_BOSS_ORDER + 발드릭스, 검은 마법사는 맨 뒤).
+// 순서를 바꾸려면 BOSS_CATALOG 배열 순서만 고치면 된다.
+const BOSS_ORDER = BOSS_CATALOG.map((b) => b.name);
+
+// [추가] 보스 표시 순서 비교 함수 -- 스케줄의 보스 목록과 그룹 관리가 같은 순서를 쓴다.
+// BOSS_ORDER(BOSS_CATALOG) 순서 -> 같은 보스는 쉬운 난이도 먼저 -> 표에 없는 보스는 sort_order(추가한 순서)대로 맨 뒤.
+export function compareBossOrder(
+  a: { name: string; difficulty: string | null; sort_order: number },
+  b: { name: string; difficulty: string | null; sort_order: number }
+): number {
+  const idx = (n: string) => {
+    const i = BOSS_ORDER.indexOf(n);
+    return i === -1 ? 999 : i;
+  };
+  const rank = (d: string | null) => (d ? DIFFICULTIES.indexOf(d as Difficulty) : -1);
+  return idx(a.name) - idx(b.name) || rank(a.difficulty) - rank(b.difficulty) || a.sort_order - b.sort_order;
+}
 
 // [추가] 그 보스에 실제로 있는 난이도만 돌려준다 (MESO_TABLE 기준, 이지→익스트림 순서).
 // 표에 없는 보스(직접 입력)면 전체 난이도를 돌려준다.

@@ -3,9 +3,12 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { normalizeNexonDifficulty } from "@/lib/scheduling/meso";
+import { displayBossName, normalizeNexonDifficulty } from "@/lib/scheduling/meso";
 import DifficultyBadge from "@/components/DifficultyBadge";
-import type { Difficulty } from "@/lib/scheduling/types";
+import type { RawBoss, RawParty } from "@/lib/scheduling/snapshot";
+import { isMonthlyBossName, plansFromScheduler, soloPeriodKey, type SoloPlanRow } from "@/lib/scheduling/solo";
+import { setPartyCleared } from "@/lib/scheduling/partyClear";
+import type { ConfirmationMap } from "@/lib/scheduling/types";
 
 interface FetchedBoss {
   name: string;
@@ -36,17 +39,10 @@ interface Props {
   myCharacterName?: string | null;
   savedCharacterNames?: string[]; // [추가] 이미 저장된 내 캐릭터 이름(초기 목록용)
   currentUserId: string;
-}
-
-// "검은 마법사"만 월간, 나머지는 전부 주간 -- 지금 기준 메이플 보스 중
-// 실제로 월 단위로 리셋되는 건 검은 마법사뿐이라 하드코딩. 넥슨 cycle
-// 필드 값이 애매하면("월" 포함 여부로 1차 추정) 이걸로 덮어쓴다.
-const MONTHLY_BOSS_NAMES = ["검은 마법사"];
-
-function guessPeriod(name: string, cycle: string): "weekly" | "monthly" {
-  if (MONTHLY_BOSS_NAMES.some((m) => name.includes(m))) return "monthly";
-  if (cycle?.includes("월")) return "monthly";
-  return "weekly";
+  bosses: RawBoss[]; // [추가] 그룹 보스 명단 (후보는 이미 있는 보스에만 등록, 파티 보스 판별)
+  parties: RawParty[]; // [추가] 메소 카드 자동 채우기에서 파티 보스를 먼저 빼기 위해
+  soloPlans: SoloPlanRow[]; // [추가] 기존 솔로 계획의 공팟 인원 유지용
+  confirmed: ConfirmationMap; // [추가] 이번주 파티 확정 (인게임 완료로 파티 클리어 반영할 때 기존 확정 유지)
 }
 
 // [고침] "이미 있음"은 "이 보스/난이도가 그룹 명단에 이미 있다"가 아니라
@@ -67,6 +63,10 @@ export default function ImportBossesFromNexon({
   myCharacterName,
   currentUserId,
   savedCharacterNames,
+  bosses: groupBosses,
+  parties,
+  soloPlans,
+  confirmed,
 }: Props) {
   const supabase = createClient();
   const router = useRouter();
@@ -84,6 +84,15 @@ export default function ImportBossesFromNexon({
   const [bosses, setBosses] = useState<FetchedBoss[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState(false);
+  // [추가] 메소 카드 자동 채우기 결과 한 줄 요약 (캐릭터별)
+  const [soloSummary, setSoloSummary] = useState<string[]>([]);
+
+  // [추가] 그룹에 이미 있는 보스(이름·난이도)인지. 불러오기는 그룹 보스 목록을 바꾸지 않으므로
+  // 그룹에 없는 보스는 후보로 등록할 수 없다 (보스 일정은 그룹장만 바꾼다, 0014).
+  function groupBossId(b: { name: string; difficulty: string }): string | null {
+    const d = normalizeNexonDifficulty(b.difficulty);
+    return groupBosses.find((g) => g.name === b.name && (g.difficulty ?? null) === d)?.id ?? null;
+  }
 
   function bossKey(b: FetchedBoss) {
     return `${b.characterName}__${b.name}__${b.difficulty}`;
@@ -133,15 +142,81 @@ export default function ImportBossesFromNexon({
       router.refresh(); // [추가] 저장한 부캐가 메소 카드에 바로 나오게 새로고침
     }
 
+    // [추가] 인게임 스케줄러로 "캐릭터별 메소 · 솔로 보스"의 이번주 솔로 계획을 덮어쓴다.
+    // 파티 보스는 빼고(파티 우선), 나머지 스케줄러 보스를 그 난이도로 넣는다. 다음주 계획은 건드리지 않는다.
+    // 덮어쓴 뒤에도 메소 카드에서 직접 고칠 수 있다.
+    const bossById = new Map(groupBosses.map((b) => [b.id, b]));
+    const summary: string[] = [];
+    for (const r of results) {
+      if (r.error) continue;
+      const { plans, partySkipped, noMeso } = plansFromScheduler(
+        currentUserId,
+        r.character_name,
+        r.bosses.map((b) => ({ name: b.name, difficulty: normalizeNexonDifficulty(b.difficulty), complete: b.complete })),
+        parties,
+        bossById,
+        soloPlans
+      );
+      await supabase
+        .from("solo_plans")
+        .delete()
+        .match({ project_id: projectId, user_id: currentUserId, character_name: r.character_name, week: "this" });
+      if (plans.length > 0) {
+        await supabase.from("solo_plans").insert(
+          plans.map((pl) => ({
+            project_id: projectId,
+            user_id: currentUserId,
+            character_name: r.character_name,
+            week: "this" as const,
+            boss_name: pl.boss_name,
+            difficulty: pl.difficulty,
+            party_size: pl.party_size,
+          }))
+        );
+      }
+      // [추가] 인게임 이번주 완료 여부(complete_flag)가 우선: 솔로 보스 클리어는 스케줄러대로 덮어쓰고,
+      // 파티 보스가 완료면 그 파티를 클리어로 바꾼다(파티원이 따로 누르지 않아도 됨).
+      // 파티 보스가 미완료여도 파티 클리어는 해제하지 않는다 -- 다른 파티원의 인게임 완료/클릭을 지우지 않기 위해.
+      let clearedCount = 0;
+      for (const pl of plans) {
+        const key = {
+          project_id: projectId,
+          user_id: currentUserId,
+          character_name: r.character_name,
+          boss_name: pl.boss_name,
+          period_key: soloPeriodKey(isMonthlyBossName(pl.boss_name)),
+        };
+        if (pl.complete) {
+          await supabase.from("solo_clears").upsert(key);
+          clearedCount++;
+        } else {
+          await supabase.from("solo_clears").delete().match(key);
+        }
+      }
+      for (const ps of partySkipped) {
+        if (!ps.complete) continue;
+        await setPartyCleared(supabase, ps.partyId, confirmed[ps.partyId], true, currentUserId);
+        clearedCount++;
+      }
+      summary.push(
+        `${r.character_name}: 솔로 ${plans.length}개` +
+          (partySkipped.length ? ` (파티 ${partySkipped.length}개 제외)` : "") +
+          ` · 클리어 ${clearedCount}개` + // [추가] 인게임 완료로 체크된 수 (솔로 + 파티)
+          (noMeso.length ? ` · 메소표에 없어 제외: ${noMeso.map((n) => displayBossName(n.name)).join(", ")}` : "")
+      );
+    }
+    setSoloSummary(summary);
+    if (summary.length > 0) router.refresh();
+
     const allBosses: FetchedBoss[] = results.flatMap((r) =>
       r.error ? [] : r.bosses.map((b) => ({ ...b, characterName: r.character_name }))
     );
     setBosses(allBosses);
 
-    // 이미 그룹 명단에 있는 보스(이름+난이도 기준)는 기본 선택 해제.
+    // 이미 후보로 있거나 그룹에 없는 보스는 기본 선택 해제.
     const initial = new Set<string>();
     for (const b of allBosses) {
-      if (isAlreadyAdded(existingCandidates, b)) continue;
+      if (isAlreadyAdded(existingCandidates, b) || !groupBossId(b)) continue; // [변경] 그룹에 없는 보스는 후보 불가
       initial.add(bossKey(b));
     }
     setSelected(initial);
@@ -155,7 +230,7 @@ export default function ImportBossesFromNexon({
   }
 
   // 선택된 후보들을 (보스 이름, 난이도)로 묶어서 보여주기 위한 그룹핑.
-  type BossGroup = { name: string; difficulty: string; period: "weekly" | "monthly"; chars: FetchedBoss[] };
+  type BossGroup = { name: string; difficulty: string; chars: FetchedBoss[] };
   const groups: BossGroup[] = [];
   {
     const byKey = new Map<string, BossGroup>();
@@ -163,7 +238,7 @@ export default function ImportBossesFromNexon({
       const key = `${b.name}__${normalizeNexonDifficulty(b.difficulty) ?? ""}`;
       let g = byKey.get(key);
       if (!g) {
-        g = { name: b.name, difficulty: b.difficulty, period: guessPeriod(b.name, b.cycle), chars: [] };
+        g = { name: b.name, difficulty: b.difficulty, chars: [] };
         byKey.set(key, g);
         groups.push(g);
       }
@@ -179,71 +254,12 @@ export default function ImportBossesFromNexon({
     }
     setSaving(true);
 
-    // (이름, 정규화된 난이도) 기준으로 중복 없는 보스 집합을 만든다.
-    const dedup = new Map<string, FetchedBoss>();
-    for (const b of toAdd) {
-      const dedupeKey = `${b.name}__${normalizeNexonDifficulty(b.difficulty) ?? ""}`;
-      if (!dedup.has(dedupeKey)) dedup.set(dedupeKey, b);
-    }
-    const uniqueBosses = [...dedup.values()];
-
-    // 이미 group 명단에 있는 보스는 기존 id를, 없으면 새로 insert한 id를 쓴다.
-    const { data: existingSortRows } = await supabase
-      .from("bosses")
-      .select("sort_order")
-      .eq("project_id", projectId)
-      .order("sort_order", { ascending: false })
-      .limit(1);
-    let nextOrder = (existingSortRows?.[0]?.sort_order ?? -1) + 1;
-
-    const { data: existingFull } = await supabase
-      .from("bosses")
-      .select("id, name, difficulty")
-      .eq("project_id", projectId);
-    const bossIdByKey = new Map<string, string>();
-    for (const row of (existingFull ?? []) as { id: string; name: string; difficulty: string | null }[]) {
-      bossIdByKey.set(`${row.name}__${row.difficulty ?? ""}`, row.id);
-    }
-    const newBossRows: { project_id: string; name: string; period: "weekly" | "monthly"; difficulty: Difficulty | null; sort_order: number }[] = [];
-    const newBossKeys: string[] = [];
-    for (const b of uniqueBosses) {
-      const normalizedDiff = normalizeNexonDifficulty(b.difficulty);
-      const key = `${b.name}__${normalizedDiff ?? ""}`;
-      if (bossIdByKey.has(key)) continue;
-      newBossRows.push({
-        project_id: projectId,
-        name: b.name,
-        period: guessPeriod(b.name, b.cycle),
-        difficulty: normalizedDiff,
-        sort_order: nextOrder++,
-      });
-      newBossKeys.push(key);
-    }
-
-    if (newBossRows.length > 0) {
-      const { data: inserted, error: insertErr } = await supabase.from("bosses").insert(newBossRows).select("id, name, difficulty");
-      if (insertErr) {
-        setSaving(false);
-        setError(insertErr.message);
-        return;
-      }
-      for (const row of (inserted ?? []) as { id: string; name: string; difficulty: string | null }[]) {
-        bossIdByKey.set(`${row.name}__${row.difficulty ?? ""}`, row.id);
-      }
-    }
-
-    // 선택된 모든 캐릭터(보스 하나당 여러 캐릭터 가능)를 후보 풀(boss_candidates)에
-    // 넣는다. party_members에는 아직 안 넣는다 -- 드래그 앤 드롭으로 직접
-    // 배정하기 전까지는 후보 상태로 둔다.
-    const candidateRows = toAdd.map((b) => {
-      const normalizedDiff = normalizeNexonDifficulty(b.difficulty);
-      const bossId = bossIdByKey.get(`${b.name}__${normalizedDiff ?? ""}`)!;
-      return {
-        project_id: projectId,
-        boss_id: bossId,
-        user_id: currentUserId,
-        character_name: b.characterName,
-      };
+    // [변경] 불러오기는 그룹 보스 목록을 바꾸지 않는다 (보스 일정은 그룹장만, 0014).
+    // 그룹에 이미 있는 보스(이름·난이도)에만 내 캐릭터를 후보(boss_candidates)로 넣는다.
+    // party_members에는 넣지 않는다 -- 그룹장이 파티 폼에서 "후보" 표시를 보고 골라 넣는다.
+    const candidateRows = toAdd.flatMap((b) => {
+      const bossId = groupBossId(b);
+      return bossId ? [{ project_id: projectId, boss_id: bossId, user_id: currentUserId, character_name: b.characterName }] : [];
     });
 
     if (candidateRows.length > 0) {
@@ -271,8 +287,9 @@ export default function ImportBossesFromNexon({
           <h2 className="font-semibold">넥슨 스케줄러에서 보스 불러오기</h2>
           <p className="label">
             넥슨 스케줄러 등록 정보는 비공개라서, <b>프로필에 연동해둔 내 넥슨 API 키로 내 캐릭터(본캐+부캐)만</b>{" "}
-            불러올 수 있어요 — 다른 사람 캐릭터는 그 사람이 직접 연동해서 불러와야 해요. 불러온 건 아래 "후보
-            캐릭터"에 담기고, 보스 명단 쪽에서 드래그해 파티에 배정하면 돼요.
+            불러올 수 있어요 — 다른 사람 캐릭터는 그 사람이 직접 연동해서 불러와야 해요. 불러오면 인게임 스케줄러대로
+            "캐릭터별 메소 · 솔로 보스"의 이번주 솔로 계획이 채워지고(파티 보스는 제외, 이후 직접 수정 가능), 그룹에 있는
+            보스는 후보로 추가할 수 있어요.
           </p>
         </div>
         {!open && (
@@ -344,6 +361,17 @@ export default function ImportBossesFromNexon({
                   ))}
                 </div>
               )}
+              {/* [추가] 메소 카드 자동 채우기 결과 */}
+              {soloSummary.length > 0 && (
+                <div className="flex flex-col gap-0.5">
+                  <p className="label">메소 카드 반영 (이번주 솔로 계획·클리어를 인게임 스케줄러로 덮어씀)</p>
+                  {soloSummary.map((s) => (
+                    <p key={s} className="text-xs text-slate-600">
+                      {s}
+                    </p>
+                  ))}
+                </div>
+              )}
               {bosses.length === 0 && (
                 <p className="text-muted">
                   등록된 보스가 없어요. 게임 내에서 먼저 스케줄러에 보스를 등록해주세요.
@@ -354,20 +382,27 @@ export default function ImportBossesFromNexon({
                 {groups.map((g) => (
                   <div key={`${g.name}__${g.difficulty}`} className="flex flex-col gap-1">
                     <p className="label">
-                      {g.name}
+                      {displayBossName(g.name)} {/* [변경] 화면에는 넥슨 풀네임으로 */}
                       {/* [변경] 넥슨이 주는 영문 난이도 대신 난이도 배지 */}
                       <DifficultyBadge difficulty={normalizeNexonDifficulty(g.difficulty)} className="ml-1.5" />
+                      {/* [추가] 그룹에 없는 보스는 후보로 넣을 수 없다 (그룹장이 그룹 관리에서 파티를 만들어야 생김) */}
+                      {!groupBossId(g) && <span className="ml-1.5 text-slate-400">· 그룹에 없는 보스</span>}
                     </p>
                     <div className="flex flex-wrap gap-2">
                       {g.chars.map((b) => {
                         const key = bossKey(b);
                         const already = isAlreadyAdded(existingCandidates, b);
+                        const inGroup = !!groupBossId(b);
                         return (
-                          <label key={key} className={"pill " + (selected.has(key) ? "active" : "")}>
+                          <label
+                            key={key}
+                            className={"pill " + (selected.has(key) ? "active" : "") + (inGroup ? "" : " opacity-50 cursor-default")}
+                          >
                             <input
                               type="checkbox"
                               className="hidden"
                               checked={selected.has(key)}
+                              disabled={!inGroup}
                               onChange={() => toggle(key)}
                             />
                             {b.characterName}

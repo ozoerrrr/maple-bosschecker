@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { MESO_TABLE, formatMeso } from "@/lib/scheduling/meso";
+import { MESO_TABLE, displayBossName, formatMeso } from "@/lib/scheduling/meso";
 import DifficultyBadge from "@/components/DifficultyBadge";
 import {
   WEEKLY_CAP,
@@ -19,7 +19,8 @@ import {
   type SoloPlanRow,
   type Week,
 } from "@/lib/scheduling/solo";
-import type { Difficulty } from "@/lib/scheduling/types";
+import type { ConfirmationMap, Difficulty } from "@/lib/scheduling/types";
+import { setPartyCleared } from "@/lib/scheduling/partyClear";
 import type { RawBoss, RawParty } from "@/lib/scheduling/snapshot";
 
 interface Props {
@@ -32,6 +33,7 @@ interface Props {
   soloClears: SoloClearRow[];
   extraChars: ExtraCharRow[];
   candidates: { userId: string; characterName: string }[]; // [추가] 넥슨 후보로 등록한 캐릭터 (부캐 표시용)
+  confirmed: ConfirmationMap; // [추가] 이번주 파티 확정 (파티 보스 클리어 체크박스용)
   onChanged: () => void;
 }
 
@@ -157,6 +159,11 @@ export default function CharacterMesoCard(props: Props) {
     });
   }
 
+  // [추가] 파티로 가는 보스의 클리어 체크 = 그 파티의 클리어 상태 (스케줄 보스 목록의 "클리어 ✓"와 같은 값)
+  function setPartyDone(partyId: string, on: boolean) {
+    run(() => setPartyCleared(supabase, partyId, props.confirmed[partyId], on, uid));
+  }
+
   /** 캐릭터의 솔로 보스 일괄 클리어: 하나라도 안 했으면 전부 체크, 전부 했으면 전부 해제. */
   function bulkDone(ch: string) {
     const row = rows.find((r) => r.ch === ch);
@@ -216,14 +223,28 @@ export default function CharacterMesoCard(props: Props) {
     const counted = cur && !row.cw.excluded.has(b.name);
     return (
       <div key={b.name} className="flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-slate-100 py-1.5">
-        <div className="w-28 shrink-0 text-[13px] font-semibold text-slate-700">{b.name}</div>
-        {inParty ? (
+        <div className="w-28 shrink-0 text-[13px] font-semibold text-slate-700">{displayBossName(b.name)}</div>
+        {inParty && (
           <div className="text-xs text-slate-500">
             파티로 진행 중
             <DifficultyBadge difficulty={inParty.difficulty} className="ml-1" />
             {inParty.meso != null && <> · {formatMeso(inParty.meso)}</>}
           </div>
-        ) : (
+        )}
+        {/* [추가] 파티 보스도 클리어 체크 (이번주만). 체크하면 그 파티가 클리어 처리된다 */}
+        {inParty && weekMode === "this" && (
+          <label className="ml-auto inline-flex cursor-pointer items-center gap-1 text-xs text-slate-500">
+            <input
+              type="checkbox"
+              className="!p-0"
+              disabled={isPending}
+              checked={!!props.confirmed[inParty.partyId]?.cleared}
+              onChange={(e) => setPartyDone(inParty.partyId, e.target.checked)}
+            />
+            클리어
+          </label>
+        )}
+        {!inParty && (
           <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
             {maxSize > 1 && (
               <select
@@ -349,7 +370,7 @@ export default function CharacterMesoCard(props: Props) {
                 </div>
                 {cw.bad.map((b) => (
                   <p key={b.it.name} className="mt-1 text-xs text-amber-600">
-                    {b.it.name} <DifficultyBadge difficulty={b.it.diff} />
+                    {displayBossName(b.it.name)} <DifficultyBadge difficulty={b.it.diff} />
                     {b.it.size > 1 ? ` (${b.it.size}인)` : ""} —{" "}
                     {b.why === "party"
                       ? "파티로 같은 보스를 가서 계산에서 빠져요"
