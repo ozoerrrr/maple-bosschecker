@@ -18,7 +18,8 @@ import MonthlyBlockCalendar from "@/components/MonthlyBlockCalendar";
 import MySchedule from "@/components/MySchedule";
 import CharacterMesoCard from "@/components/CharacterMesoCard";
 import type { ExtraCharRow, SoloClearRow, SoloPlanRow } from "@/lib/scheduling/solo";
-import BossList from "@/components/BossList";
+import BossList, { OPEN_PARTY_EVENT } from "@/components/BossList";
+import NextWeekNoticeCard from "@/components/NextWeekNoticeCard"; // [추가] 0020
 import ImportBossesFromNexon from "@/components/ImportBossesFromNexon";
 import { markSynced, shouldAutoSync, syncFromScheduler } from "@/lib/nexon/syncScheduler";
 import { markLocalChange } from "@/components/LiveRefreshButton";
@@ -300,6 +301,26 @@ export default function ScheduleBoard(props: Props) {
           </button>
         </div>
       </section>
+
+      {/* [추가] 0020: 다음 목요일부터 바뀌는 파티 공지 (다음주 따로인 보스가 실제로 바뀐 경우만 보임) */}
+      <NextWeekNoticeCard
+        projectId={props.projectId}
+        currentUserId={props.currentUserId}
+        bosses={props.bosses}
+        parties={props.parties}
+        nextParties={props.nextParties}
+        memberName={memberName}
+        onOpenBoss={(bossId) => {
+          // 토글을 다음주로 바꾸고, 다시 그려진 뒤 그 보스의 첫 파티를 펼쳐 스크롤한다
+          setWeekMode("next");
+          const first = props.nextParties.filter((p) => p.boss_id === bossId).sort((a, b) => a.sort_order - b.sort_order)[0];
+          if (!first) return;
+          setTimeout(() => {
+            window.dispatchEvent(new CustomEvent(OPEN_PARTY_EVENT, { detail: first.id }));
+            setTimeout(() => document.getElementById(`party-${first.id}`)?.scrollIntoView({ behavior: "smooth", block: "center" }), 80);
+          }, 50);
+        }}
+      />
 
       {/* [추가] 내 스케줄: 내가 속한 파티를 시간순으로 모아 본다 */}
       <MySchedule
