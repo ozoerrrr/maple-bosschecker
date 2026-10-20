@@ -37,6 +37,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 </span>
               </div>
             </Link>
+            {/* [추가] 오른쪽 버튼 자리: 그룹 화면이 새로고침·도움말 버튼을 여기에 그린다 (HeaderActions 포털) */}
+            <div id="site-header-actions" className="flex items-center gap-2" />
           </div>
         </header>
 

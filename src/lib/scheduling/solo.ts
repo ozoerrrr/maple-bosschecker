@@ -205,17 +205,13 @@ export function charWeek(
   };
 }
 
-/** 내 캐릭터 목록: 내가 파티원으로 들어간 캐릭터 + 직접 추가한 캐릭터. */
-// [변경] 넥슨에서 불러온 후보 캐릭터(candidates)도 내 캐릭터로 센다 (메소 카드 부캐 누락 버그 수정)
-export function myCharacters(
-  uid: string,
-  parties: RawParty[],
-  extras: ExtraCharRow[],
-  candidates: { userId: string; characterName: string }[] = []
-): string[] {
+/**
+ * [변경] 내 캐릭터 목록 (메소 카드): 직접 추가했거나 넥슨 불러오기로 저장된 캐릭터(extra_characters)만.
+ * 파티에만 들어간 캐릭터·후보 캐릭터는 넥슨 동기화로 조회에 성공해야(=extra_characters에 저장돼야) 들어온다.
+ * (운영자가 파티 폼에서 직접 입력한 캐릭터가 본인 확인 없이 메소 카드에 뜨지 않게 하려는 것)
+ */
+export function myCharacters(uid: string, extras: ExtraCharRow[]): string[] {
   const set = new Set<string>();
-  for (const c of candidates) if (c.userId === uid && c.characterName) set.add(c.characterName);
-  for (const p of parties) for (const m of p.members) if (m.userId === uid && m.characterName) set.add(m.characterName);
   for (const e of extras) if (e.user_id === uid) set.add(e.character_name);
   return [...set];
 }

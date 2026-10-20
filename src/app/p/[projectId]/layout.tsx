@@ -1,5 +1,6 @@
 import Link from "next/link";
 import HelpToggle from "@/components/HelpToggle";
+import HeaderActions from "@/components/HeaderActions"; // [추가]
 import LiveRefreshButton from "@/components/LiveRefreshButton";
 import { requireProjectMember } from "@/lib/project";
 
@@ -21,10 +22,12 @@ export default async function ProjectLayout({
           </Link>
           <h1 className="text-xl font-bold flex items-center gap-2">
             {project.name}
-            {/* [추가] 변경 알림(레드닷) + 새로고침 버튼 (스케줄 페이지에서만 보임) */}
-            <LiveRefreshButton projectId={project.id} currentUserId={user.id} />
-            <HelpToggle projectId={project.id} /> {/* [변경] 도움말 버튼을 그룹 이름 옆으로 (스케줄 페이지에서만 보임) */}
           </h1>
+          {/* [변경] 변경 알림(레드닷)·새로고침, 도움말 버튼을 사이트 상단 바 오른쪽으로 (스케줄 페이지에서만 보임) */}
+          <HeaderActions>
+            <LiveRefreshButton projectId={project.id} currentUserId={user.id} />
+            <HelpToggle projectId={project.id} />
+          </HeaderActions>
         </div>
         <nav className="flex gap-2 text-sm">
           <Link href={`/p/${project.id}`} className="btn-secondary">

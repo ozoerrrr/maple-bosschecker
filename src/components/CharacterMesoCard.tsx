@@ -67,7 +67,7 @@ export default function CharacterMesoCard(props: Props) {
 
   // 캐릭터별 계산 결과 (수익 높은 순 = 강한 캐릭터 순, 같으면 가나다순)
   const rows = useMemo(() => {
-    const chars = myCharacters(uid, props.parties, props.extraChars, props.candidates);
+    const chars = myCharacters(uid, props.extraChars); // [변경] 내 캐릭터(extra_characters)만
     return chars
       .map((ch) => {
         const plan = planRowsFor(props.soloPlans, uid, ch, weekMode);
@@ -75,7 +75,7 @@ export default function CharacterMesoCard(props: Props) {
         return { ch, plan, cw, total: cw.partyMeso + cw.soloMeso + cw.monthlyPartyMeso + cw.soloMonthly };
       })
       .sort((a, b) => b.total - a.total || a.ch.localeCompare(b.ch, "ko"));
-  }, [uid, props.parties, props.extraChars, props.candidates, props.soloPlans, weekMode, bossById]);
+  }, [uid, props.parties, props.extraChars, props.soloPlans, weekMode, bossById]);
 
   const clearKeys = useMemo(
     () =>
@@ -413,7 +413,11 @@ export default function CharacterMesoCard(props: Props) {
       )}
 
       {rows.length === 0 && (
-        <p className="sub">표시할 캐릭터가 없어요. 파티에 들어가거나 아래에서 캐릭터를 추가해 주세요.</p>
+        // [변경] 메소 카드는 내 캐릭터만 보여주므로 등록 방법을 안내한다
+        <p className="sub">
+          아직 등록된 내 캐릭터가 없어요. 아래 "캐릭터 추가"로 넣거나, 넥슨을 연동했다면 "넥슨 불러오기"를 눌러 주세요. 파티에
+          들어간 내 캐릭터도 함께 불러와져요.
+        </p>
       )}
 
       {rows.map((row) => {

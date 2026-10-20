@@ -101,7 +101,7 @@ export default function NextWeekNoticeCard({ projectId, currentUserId: me, bosse
         {/* [추가] 제목을 누르면 카드 접기/펴기 */}
         <button type="button" className="card-toggle" onClick={toggleCard} aria-expanded={cardOpen}>
           <span className="card-toggle-chevron" aria-hidden="true">▸</span>
-          📅 {month0 + 1}월 {day}일(목)부터 바뀌는 파티
+          📅 {month0 + 1}월 {day}일(목)부터 바뀌는 변경사항 {/* [변경] 제목 "바뀌는 파티" -> "바뀌는 변경사항" */}
         </button>
       </h2>
       {cardOpen && (

@@ -143,8 +143,11 @@ export default function ScheduleBoard(props: Props) {
     const names = new Set<string>();
     for (const c of props.candidates) if (c.userId === props.currentUserId) names.add(c.characterName);
     for (const e of props.extraChars) if (e.user_id === props.currentUserId) names.add(e.character_name);
+    // [추가] 내가 들어간 파티의 캐릭터(이번주·다음주)도 넥슨 조회 대상 -> 조회에 성공하면 내 캐릭터(extra_characters)로 저장된다
+    for (const p of [...props.parties, ...props.nextParties])
+      for (const m of p.members) if (m.userId === props.currentUserId && m.characterName) names.add(m.characterName);
     return [...names];
-  }, [props.candidates, props.extraChars, props.currentUserId]);
+  }, [props.candidates, props.extraChars, props.parties, props.nextParties, props.currentUserId]);
 
   const existingCandidates = useMemo(() => {
     const bossById = new Map(props.bosses.map((b) => [b.id, b]));
