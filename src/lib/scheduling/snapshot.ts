@@ -12,6 +12,7 @@ export interface RawBoss {
   difficulty: Difficulty | null;
   sort_order: number;
   next_custom?: boolean; // [추가] 0017: 다음주 파티를 이번주와 따로 짰는지
+  next_note?: string | null; // [추가] 0020: 다음주 공지 카드 메모
 }
 
 /** party_members 조인 결과 한 행: 누구(user_id)이고, 어떤 캐릭터로 도는지. */

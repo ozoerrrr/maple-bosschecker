@@ -70,6 +70,11 @@ html, body {
   cursor: pointer;
 }
 .boss-group-head:hover { background: #EDF0F8; }
+/* [추가] 카드 제목 접기/펴기 버튼 (보스 목록·메소·다음주 공지). ▸ 표시는 보스 줄보다 크게 */
+.card-toggle { display: inline-flex; align-items: center; gap: 8px; background: none; border: 0; padding: 0; font: inherit; color: inherit; text-align: left; cursor: pointer; }
+.card-toggle-chevron { display: inline-flex; flex: none; width: 24px; height: 24px; align-items: center; justify-content: center; border-radius: 6px; font-size: 18px; color: #64748B; transition: transform .15s ease, background .15s ease; }
+.card-toggle:hover .card-toggle-chevron { background: #EDF0F8; }
+.card-toggle[aria-expanded="true"] .card-toggle-chevron { transform: rotate(90deg); }
 /* [추가] 0018: 그룹 관리 보스 줄 헤더 = 펼치기 버튼 + 오른쪽 "보스 삭제" */
 .boss-group-headrow { display: flex; align-items: stretch; background: #F4F6FC; }
 .boss-group-headrow .boss-group-head { flex: 1; min-width: 0; }

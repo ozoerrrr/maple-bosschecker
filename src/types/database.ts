@@ -68,6 +68,7 @@ export type Database = {
           sort_order: number;
           created_at: string;
           next_custom: boolean; // [추가] 0017: 다음주 파티를 이번주와 따로 짰는지
+          next_note: string | null; // [추가] 0020: 다음주 바뀌는 파티 공지 카드의 메모
         };
         Insert: Partial<Database["public"]["Tables"]["bosses"]["Row"]> & {
           project_id: string;
@@ -237,6 +238,8 @@ export type Database = {
       // [추가] 0017 다음주 파티: 다음주 전용 파티 만들기({이번주 id: 다음주 id}) / 이번주와 같게 되돌리기
       make_next_roster: { Args: { p_boss_id: string }; Returns: Record<string, string> };
       reset_next_roster: { Args: { p_boss_id: string }; Returns: undefined };
+      // [추가] 0020 다음주 공지 메모 저장 (운영자·부운영자)
+      set_next_note: { Args: { p_boss_id: string; p_note: string }; Returns: undefined };
       // [추가] 0018 직책: 운영자가 멤버 <-> 부운영자 지정 / 운영자·부운영자인지
       set_member_role: { Args: { p_project_id: string; p_user_id: string; p_role: "manager" | "member" }; Returns: undefined };
       is_project_manager: { Args: { p_project_id: string }; Returns: boolean };

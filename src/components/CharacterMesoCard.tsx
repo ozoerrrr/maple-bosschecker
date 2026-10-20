@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { MESO_TABLE, displayBossName, formatMeso } from "@/lib/scheduling/meso";
 import DifficultyBadge from "@/components/DifficultyBadge";
 import MesoProgress from "@/components/MesoProgress";
+import { useCardOpen } from "@/lib/useCardOpen"; // [추가] 카드 접기/펴기
 import {
   WEEKLY_CAP,
   SOLO_MAX,
@@ -54,6 +55,8 @@ export default function CharacterMesoCard(props: Props) {
   const [isPending, startTransition] = useTransition();
   const [open, setOpen] = useState<Set<string>>(new Set());
   const [newChar, setNewChar] = useState("");
+  // [추가] 카드 접기/펴기 (기본 펼침, 이 브라우저에 기억)
+  const [cardOpen, toggleCard] = useCardOpen(`${projectId}:meso`);
   // 아직 난이도를 고르지 않은 보스의 인원수 (난이도를 고르면 이 값으로 저장)
   const [pendingSize, setPendingSize] = useState<Record<string, number>>({});
 
@@ -64,7 +67,7 @@ export default function CharacterMesoCard(props: Props) {
 
   // 캐릭터별 계산 결과 (수익 높은 순 = 강한 캐릭터 순, 같으면 가나다순)
   const rows = useMemo(() => {
-    const chars = myCharacters(uid, props.parties, props.extraChars, props.candidates);
+    const chars = myCharacters(uid, props.extraChars); // [변경] 내 캐릭터(extra_characters)만
     return chars
       .map((ch) => {
         const plan = planRowsFor(props.soloPlans, uid, ch, weekMode);
@@ -72,7 +75,7 @@ export default function CharacterMesoCard(props: Props) {
         return { ch, plan, cw, total: cw.partyMeso + cw.soloMeso + cw.monthlyPartyMeso + cw.soloMonthly };
       })
       .sort((a, b) => b.total - a.total || a.ch.localeCompare(b.ch, "ko"));
-  }, [uid, props.parties, props.extraChars, props.candidates, props.soloPlans, weekMode, bossById]);
+  }, [uid, props.parties, props.extraChars, props.soloPlans, weekMode, bossById]);
 
   const clearKeys = useMemo(
     () =>
@@ -335,9 +338,13 @@ export default function CharacterMesoCard(props: Props) {
     <section className="card flex flex-col gap-3">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h2 className="text-base font-bold text-slate-900">
-          🪙 캐릭터별 메소 · 솔로 보스
-          {/* [변경] "○○주 기준" 글자 대신 제목 옆 "다음주" 표시로 (이번주는 표시 없음) */}
-          {weekMode === "next" && <span className="ml-2 text-xs font-bold text-sky-600">다음주</span>}
+          {/* [추가] 제목을 누르면 카드 접기/펴기 (오른쪽 넥슨 불러오기 버튼은 그대로) */}
+          <button type="button" className="card-toggle" onClick={toggleCard} aria-expanded={cardOpen}>
+            <span className="card-toggle-chevron" aria-hidden="true">▸</span>
+            🪙 캐릭터별 메소 · 솔로 보스
+            {/* [변경] "○○주 기준" 글자 대신 제목 옆 "다음주" 표시로 (이번주는 표시 없음) */}
+            {weekMode === "next" && <span className="text-xs font-bold text-sky-600">다음주</span>}
+          </button>
         </h2>
         <div className="flex items-center gap-2">
           {/* [추가] 넥슨 인게임 스케줄러로 솔로 계획·클리어 다시 불러오기 (넥슨 연동한 사람만) */}
@@ -353,6 +360,8 @@ export default function CharacterMesoCard(props: Props) {
           )}
         </div>
       </div>
+      {cardOpen && (
+      <>
       {/* [추가] 도움말(? 버튼을 켰을 때만 보임) */}
       <p className="sub help-detail">
         캐릭터 하나는 주간 보스를 12개까지 돌 수 있고, 같은 보스는 난이도와 상관없이 1개로 세요. 파티로 가는 보스는
@@ -404,7 +413,11 @@ export default function CharacterMesoCard(props: Props) {
       )}
 
       {rows.length === 0 && (
-        <p className="sub">표시할 캐릭터가 없어요. 파티에 들어가거나 아래에서 캐릭터를 추가해 주세요.</p>
+        // [변경] 메소 카드는 내 캐릭터만 보여주므로 등록 방법을 안내한다
+        <p className="sub">
+          아직 등록된 내 캐릭터가 없어요. 아래 "캐릭터 추가"로 넣거나, 넥슨을 연동했다면 "넥슨 불러오기"를 눌러 주세요. 파티에
+          들어간 내 캐릭터도 함께 불러와져요.
+        </p>
       )}
 
       {rows.map((row) => {
@@ -512,6 +525,8 @@ export default function CharacterMesoCard(props: Props) {
           캐릭터 추가
         </button>
       </div>
+      </>
+      )}
     </section>
   );
 }

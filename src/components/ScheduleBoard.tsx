@@ -18,7 +18,8 @@ import MonthlyBlockCalendar from "@/components/MonthlyBlockCalendar";
 import MySchedule from "@/components/MySchedule";
 import CharacterMesoCard from "@/components/CharacterMesoCard";
 import type { ExtraCharRow, SoloClearRow, SoloPlanRow } from "@/lib/scheduling/solo";
-import BossList from "@/components/BossList";
+import BossList, { OPEN_PARTY_EVENT } from "@/components/BossList";
+import NextWeekNoticeCard from "@/components/NextWeekNoticeCard"; // [추가] 0020
 import ImportBossesFromNexon from "@/components/ImportBossesFromNexon";
 import { markSynced, shouldAutoSync, syncFromScheduler } from "@/lib/nexon/syncScheduler";
 import { markLocalChange } from "@/components/LiveRefreshButton";
@@ -142,8 +143,11 @@ export default function ScheduleBoard(props: Props) {
     const names = new Set<string>();
     for (const c of props.candidates) if (c.userId === props.currentUserId) names.add(c.characterName);
     for (const e of props.extraChars) if (e.user_id === props.currentUserId) names.add(e.character_name);
+    // [추가] 내가 들어간 파티의 캐릭터(이번주·다음주)도 넥슨 조회 대상 -> 조회에 성공하면 내 캐릭터(extra_characters)로 저장된다
+    for (const p of [...props.parties, ...props.nextParties])
+      for (const m of p.members) if (m.userId === props.currentUserId && m.characterName) names.add(m.characterName);
     return [...names];
-  }, [props.candidates, props.extraChars, props.currentUserId]);
+  }, [props.candidates, props.extraChars, props.parties, props.nextParties, props.currentUserId]);
 
   const existingCandidates = useMemo(() => {
     const bossById = new Map(props.bosses.map((b) => [b.id, b]));
@@ -300,6 +304,26 @@ export default function ScheduleBoard(props: Props) {
           </button>
         </div>
       </section>
+
+      {/* [추가] 0020: 다음 목요일부터 바뀌는 파티 공지 (다음주 따로인 보스가 실제로 바뀐 경우만 보임) */}
+      <NextWeekNoticeCard
+        projectId={props.projectId}
+        currentUserId={props.currentUserId}
+        bosses={props.bosses}
+        parties={props.parties}
+        nextParties={props.nextParties}
+        memberName={memberName}
+        onOpenBoss={(bossId) => {
+          // 토글을 다음주로 바꾸고, 다시 그려진 뒤 그 보스의 첫 파티를 펼쳐 스크롤한다
+          setWeekMode("next");
+          const first = props.nextParties.filter((p) => p.boss_id === bossId).sort((a, b) => a.sort_order - b.sort_order)[0];
+          if (!first) return;
+          setTimeout(() => {
+            window.dispatchEvent(new CustomEvent(OPEN_PARTY_EVENT, { detail: first.id }));
+            setTimeout(() => document.getElementById(`party-${first.id}`)?.scrollIntoView({ behavior: "smooth", block: "center" }), 80);
+          }, 50);
+        }}
+      />
 
       {/* [추가] 내 스케줄: 내가 속한 파티를 시간순으로 모아 본다 */}
       <MySchedule

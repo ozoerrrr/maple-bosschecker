@@ -6,6 +6,7 @@ import type { ScheduleSnapshot } from "@/lib/scheduling/parties";
 import { compareBossOrder, displayBossName, formatMeso, mesoPerPerson } from "@/lib/scheduling/meso";
 import DifficultyBadge from "@/components/DifficultyBadge";
 import PartyCard from "@/components/PartyCard";
+import { useCardOpen } from "@/lib/useCardOpen"; // [추가] 카드 접기/펴기
 
 interface Props {
   projectId: string;
@@ -33,6 +34,8 @@ export default function BossList(props: Props) {
   const [opened, setOpened] = useState<Set<string>>(new Set());
   // [추가] "내 파티만" 보기: 내가 파티원인 파티만 보이고, 그런 파티가 없는 보스는 숨긴다 (화면 보기 설정)
   const [onlyMine, setOnlyMine] = useState(false);
+  // [추가] 카드 접기/펴기 (기본 펼침, 이 브라우저에 기억)
+  const [cardOpen, toggleCard, setCardOpen] = useCardOpen(`${props.projectId}:boss-list`);
 
   function toggleOpen(bossId: string) {
     setOpened((prev) => {
@@ -50,12 +53,13 @@ export default function BossList(props: Props) {
       const partyId = (e as CustomEvent<string>).detail;
       const party = props.parties.find((p) => p.id === partyId);
       if (!party) return;
+      setCardOpen(true); // [추가] 카드가 접혀 있으면 먼저 펼친다
       setOpened((prev) => new Set(prev).add(party.boss_id));
       if (!party.members.some((m) => m.userId === props.currentUserId)) setOnlyMine(false);
     }
     window.addEventListener(OPEN_PARTY_EVENT, onOpenParty);
     return () => window.removeEventListener(OPEN_PARTY_EVENT, onOpenParty);
-  }, [props.parties, props.currentUserId]);
+  }, [props.parties, props.currentUserId, setCardOpen]);
 
   // [변경] 정렬 규칙은 meso.ts의 compareBossOrder (그룹 관리 화면과 같은 순서)
   const sortedBosses = useMemo(() => [...props.bosses].sort(compareBossOrder), [props.bosses]);
@@ -85,9 +89,13 @@ export default function BossList(props: Props) {
     <section className="card flex flex-col gap-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-lg font-bold">
-          🗓️ 보스 목록
-          {/* [추가] 다음주 미리입력 토글을 켰을 때 표시 (내 스케줄·메소 카드와 같은 모양) */}
-          {props.weekMode === "next" && <span className="ml-2 text-xs font-bold text-sky-600">다음주</span>}
+          {/* [추가] 제목을 누르면 카드 접기/펴기 (오른쪽 전체/내 파티만 버튼은 그대로) */}
+          <button type="button" className="card-toggle" onClick={toggleCard} aria-expanded={cardOpen}>
+            <span className="card-toggle-chevron" aria-hidden="true">▸</span>
+            🗓️ 보스 목록
+            {/* [추가] 다음주 미리입력 토글을 켰을 때 표시 (내 스케줄·메소 카드와 같은 모양) */}
+            {props.weekMode === "next" && <span className="text-xs font-bold text-sky-600">다음주</span>}
+          </button>
         </h2>
         {/* [추가] 전체 / 내 파티만 토글 */}
         <div className="inline-flex rounded-xl border border-slate-200/60 bg-slate-100 p-1">
@@ -112,6 +120,8 @@ export default function BossList(props: Props) {
         </div>
       </div>
 
+      {cardOpen && (
+      <>
       {/* [추가] 도움말(? 버튼을 켰을 때만 보임) */}
       <p className="sub help-detail">
         각 파티마다 파티원 전원이 비는 시간이 드롭다운에 후보로 떠요. 즉석으로 돈 경우엔 시간을 맞추지 않고 "클리어"를
@@ -191,6 +201,8 @@ export default function BossList(props: Props) {
             </section>
           );
         })
+      )}
+      </>
       )}
     </section>
   );

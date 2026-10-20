@@ -18,6 +18,7 @@ interface Boss {
   difficulty: Difficulty | null;
   sort_order: number;
   next_custom?: boolean; // [추가] 0017: 다음주 파티를 이번주와 따로 짰는지
+  next_note?: string | null; // [추가] 0020: 다음주 공지 카드 메모
 }
 
 interface PartyMember {
@@ -447,6 +448,10 @@ export default function BossRosterEditor({ projectId, bosses, parties, nextParti
               )}
               </div>
               <div className="boss-group-body" hidden={!isOpen}>
+                {/* [추가] 0020: 다음주 탭의 "다음주 따로" 보스는 공지 카드에 붙일 메모를 쓴다 */}
+                {week === "next" && boss?.next_custom && (
+                  <NextNoteEditor key={`${boss.id}|${boss.next_note ?? ""}`} bossId={boss.id} initial={boss.next_note ?? ""} onSaved={refresh} />
+                )}
                 {bossParties.map((p, i) => (
                   <Fragment key={p.id}>
                     {/* 파티 줄: [파티 이름] | 참여자 칩(×로 빼기) ...... 수정 삭제 */}
@@ -580,6 +585,37 @@ export default function BossRosterEditor({ projectId, bosses, parties, nextParti
           </details>
         )}
       </section>
+    </div>
+  );
+}
+
+// [추가] 0020: 다음주 공지 카드 메모 입력칸 (운영자·부운영자, set_next_note로 저장, 최대 100자)
+function NextNoteEditor({ bossId, initial, onSaved }: { bossId: string; initial: string; onSaved: () => void }) {
+  const [note, setNote] = useState(initial);
+  const [isPending, startTransition] = useTransition();
+  function save() {
+    startTransition(async () => {
+      const { error } = await createClient().rpc("set_next_note", { p_boss_id: bossId, p_note: note });
+      if (error) alert(`메모를 저장하지 못했어요: ${error.message}`);
+      onSaved();
+    });
+  }
+  return (
+    <div className="flex flex-wrap items-center gap-2 px-3.5 pt-3">
+      <span className="text-xs font-semibold text-slate-500">메모 (공지 카드에 표시)</span>
+      <input
+        value={note}
+        maxLength={100}
+        onChange={(e) => setNote(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") save();
+        }}
+        placeholder="예: 카오스 개편"
+        className="input !py-1 min-w-[160px] flex-1 text-xs"
+      />
+      <button type="button" disabled={isPending || note === initial} onClick={save} className="btn-secondary !px-3 !py-1 text-xs">
+        저장
+      </button>
     </div>
   );
 }
